@@ -33,7 +33,7 @@ jobs:
           workspaces: contracts/attestations
       - name: Build contract
         working-directory: contracts/attestations
-        run: cargo build --target wasm32v1-none --release
+        run: bash ../../scripts/run-and-annotate.sh "cargo build wasm" cargo build --target wasm32v1-none --release
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -41,7 +41,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Run the testnet demo
-        run: node dist/demo/testnet.js --wasm contracts/attestations/target/wasm32v1-none/release/scope_attestations.wasm --calls "${{ github.event.inputs.calls || '5' }}" --out demo-result.json
+        run: bash scripts/run-and-annotate.sh "testnet demo" node dist/demo/testnet.js --wasm contracts/attestations/target/wasm32v1-none/release/scope_attestations.wasm --calls "${{ github.event.inputs.calls || '5' }}" --out demo-result.json
       - name: Summary
         if: always()
         run: |
