@@ -33,6 +33,7 @@ import { checkBeforePay } from '../check.js';
 import { withTrustGuard, localChecker } from '../guard.js';
 import { measurePaid } from '../measure.js';
 import { probe } from '../probe.js';
+import { fromWellKnown } from '../indexer.js';
 import { scoreEndpoint } from '../score.js';
 import { Store } from '../store.js';
 
@@ -179,6 +180,21 @@ async function main(): Promise<void> {
       log(`agent /${name}: refused (${(e as Error).message})`);
     }
   }
+  // Conformance check of Stellar's official x402 demo (unpaid, read-only).
+  try {
+    const found = await fromWellKnown('https://stellar.org/x402-demo/api', { query: 'city=Valencia' });
+    const probes = [];
+    for (const d of found) {
+      const p = await probe(d.url);
+      probes.push({ url: d.url, status: p.status, networks: p.stellar.map((a) => a.network), issues: p.issues.map((i) => i.message) });
+      log(`official demo ${d.url}: HTTP ${p.status}, ${p.issues.length} issues`);
+    }
+    result.officialDemo = { manifest: 'https://stellar.org/x402-demo/api/.well-known/x402', probes };
+  } catch (e) {
+    result.officialDemo = { error: (e as Error).message };
+    log('official demo not reachable:', (e as Error).message);
+  }
+
   result.endpoints = endpoints;
   result.agentDecisions = decisions;
   result.finishedAt = new Date().toISOString();

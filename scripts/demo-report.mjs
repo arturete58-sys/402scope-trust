@@ -20,4 +20,12 @@ out.push('', 'Score parts (delivery 60, price 20, latency 10, declaration 10):',
 for (const e of r.endpoints ?? []) out.push(`- \`${e.endpoint}\`: ${JSON.stringify(e.score?.parts)}${e.errors?.length ? ` — errors seen: ${e.errors.join('; ')}` : ''}`);
 out.push('', '## Agent with the trust guard', '');
 for (const d of r.agentDecisions ?? []) out.push(`- \`${d.url}\`: ${d.paid ? 'paid' : `refused — ${d.reason}`}`);
+if (r.officialDemo) {
+  out.push('', "## Stellar's official x402 demo (unpaid conformance check)", '');
+  if (r.officialDemo.error) out.push(`Not reachable in this run: ${r.officialDemo.error}`);
+  else {
+    out.push(`Discovered through [its manifest](${r.officialDemo.manifest}).`, '', '| Resource | HTTP | Stellar networks | Issues |', '| --- | --- | --- | --- |');
+    for (const p of r.officialDemo.probes) out.push(`| ${p.url} | ${p.status} | ${p.networks.join(', ')} | ${p.issues.length ? p.issues.join('; ') : 'none'} |`);
+  }
+}
 console.log(out.join('\n'));

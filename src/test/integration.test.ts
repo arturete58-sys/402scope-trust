@@ -13,6 +13,7 @@ import { probe } from '../probe.js';
 import { createApi } from '../api.js';
 import { Store } from '../store.js';
 import { attestationKey } from '../key.js';
+import { fromWellKnown } from '../indexer.js';
 
 const PAY_TO = Keypair.random().publicKey();
 let seller: http.Server;
@@ -35,6 +36,10 @@ before(async () => {
     if (req.url === '/good') {
       res.writeHead(402, { 'PAYMENT-REQUIRED': encodePaymentRequiredHeader(challenge(url) as never), 'content-type': 'application/json' });
       return res.end('{}');
+    }
+    if (req.url === '/api/.well-known/x402') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ version: 1, resources: ['GET /api/good', 'POST /api/ignored', 42] }));
     }
     if (req.url === '/body-only') {
       res.writeHead(402, { 'content-type': 'application/json' });
@@ -157,4 +162,10 @@ test('probe accepts the challenge of the official @x402/express seller, and the 
   } finally {
     h.close();
   }
+});
+
+test('well-known discovery under a path prefix (as on stellar.org/x402-demo/api)', async () => {
+  const found = await fromWellKnown(`${sellerUrl}/api`, { query: 'city=Valencia' });
+  assert.deepEqual(found.map((d) => d.url), [`${sellerUrl}/api/good?city=Valencia`]);
+  assert.equal(found[0].source, `${sellerUrl}/api/.well-known/x402`);
 });

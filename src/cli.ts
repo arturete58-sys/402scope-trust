@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createApi } from './api.js';
 import { checkBeforePay } from './check.js';
-import { fromFacilitator, fromSeedFile } from './indexer.js';
+import { fromFacilitator, fromSeedFile, fromWellKnown } from './indexer.js';
 import { attestationKey } from './key.js';
 import { chainConfigFromEnv, DEFAULT_TTL_LEDGERS, latestLedger, toAttestation, writeAttestation } from './chain.js';
 import { measurePaid } from './measure.js';
@@ -23,7 +23,7 @@ const HELP = `402Scope Trust — measure x402 endpoints on Stellar and check the
   scope-trust probe <url>                 Unpaid check of the 402 challenge
   scope-trust check <url> [--min 80]      Check-before-pay verdict
   scope-trust key <payTo> <url>           Onchain attestation key
-  scope-trust index [--facilitator URL]… [--seeds seeds.txt]
+  scope-trust index [--facilitator URL]… [--wellknown ORIGIN]… [--seeds seeds.txt]
                                           Find Stellar x402 endpoints
   scope-trust run [--paid] [--calls 1]    Probe every endpoint; with --paid also make real paid calls
   scope-trust attest                      Write scores onchain (needs TRUST_CONTRACT_ID, TRUST_SIGNER_SECRET)
@@ -51,6 +51,9 @@ async function main(): Promise<void> {
     case 'index': {
       const store = Store.open();
       const found = fromSeedFile(flag('seeds', 'seeds.txt') as string);
+      for (const o of flags('wellknown')) {
+        try { found.push(...(await fromWellKnown(o))); } catch (e) { console.error(`skip ${o}: ${(e as Error).message}`); }
+      }
       for (const f of flags('facilitator')) {
         try { found.push(...(await fromFacilitator(f))); } catch (e) { console.error(`skip ${f}: ${(e as Error).message}`); }
       }
