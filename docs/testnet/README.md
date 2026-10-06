@@ -1,19 +1,19 @@
 # 402Scope Trust on Stellar testnet
 
-Run finished 2026-10-06T15:59:07.823Z. Everything below is a real testnet transaction you can open on Stellar Expert.
+Run finished 2026-10-06T16:20:33.753Z. Everything below is a real testnet transaction you can open on Stellar Expert.
 
-- Attestation contract: [CC7CQCVV6DZBX3DZM3YNYQTKP4JXIHVGAYF6SZ3HXGD2AFYP3LJKOR7U](https://stellar.expert/explorer/testnet/contract/CC7CQCVV6DZBX3DZM3YNYQTKP4JXIHVGAYF6SZ3HXGD2AFYP3LJKOR7U)
-- Test token (SEP-41, SCOPE): [CAUQCJGNJMDWZTJZCS6ZIZMEMTGF3USOKWZPKHFHC65GS63J7YXRP6DO](https://stellar.expert/explorer/testnet/contract/CAUQCJGNJMDWZTJZCS6ZIZMEMTGF3USOKWZPKHFHC65GS63J7YXRP6DO)
-- Seller: [GDK2FS…XL2M](https://stellar.expert/explorer/testnet/account/GDK2FSR3RVU77DJCWM64D67WOWXX2VE3GFVD3YOPGMBB6B6SLAAXXL2M) · Measurer: [GAQOOL…HQ5C](https://stellar.expert/explorer/testnet/account/GAQOOLORDUBLVOA73FYMB5OM7DR4W6XA7NTKLQ2IWRC3YAXQ4RIMHQ5C) · Facilitator: [GDRCYG…MXIA](https://stellar.expert/explorer/testnet/account/GDRCYGCHFJH2BSQYBLDBYKDPJLIQT653KFEVH5JHWW2ZKLRE7FGXMXIA) · Signer: [GDGQEN…JD6Z](https://stellar.expert/explorer/testnet/account/GDGQEN7YABDDOUT6SQDTYGLHCAGZRVIJUOXY6GKP2XXO4GICNLBWJD6Z)
+- Attestation contract: [CBIWC2RJLR2SLEL2SUCKLZ5SZVLX7ET2CFPNPI23F6SQ6FFVIUOWSKUO](https://stellar.expert/explorer/testnet/contract/CBIWC2RJLR2SLEL2SUCKLZ5SZVLX7ET2CFPNPI23F6SQ6FFVIUOWSKUO)
+- Test token (SEP-41, SCOPE): [CCABNNRIW75K4CHA2TV7FSYCMKXY3ZQVKAYEWVFCQ7WHFCQSS55VO7PG](https://stellar.expert/explorer/testnet/contract/CCABNNRIW75K4CHA2TV7FSYCMKXY3ZQVKAYEWVFCQ7WHFCQSS55VO7PG)
+- Seller: [GBYN2O…33ZM](https://stellar.expert/explorer/testnet/account/GBYN2O45KFW7R6JOYCWJTFB2UKBQSLR26IT67JZSMUDKJF7N5CDI33ZM) · Measurer: [GA745D…OCAP](https://stellar.expert/explorer/testnet/account/GA745DCULZX32FXIFVUFVB4P254W2KDRETO65EBYJ2X2MODRT7XQOCAP) · Facilitator: [GDZLDZ…B4HB](https://stellar.expert/explorer/testnet/account/GDZLDZOVZTBPGFMP452AGCDCME7AYNTFSMX7GQY5QSG5XCFKOHKGB4HB) · Signer: [GDDNUO…2WDT](https://stellar.expert/explorer/testnet/account/GDDNUOXPN6MQKNUEK7BYXKKBMDBY7ILOR24HKMBHMR4N4GX3B2XQ2WDT)
 
 ## Measured endpoints
 
 | Endpoint | What it does | Score | Verdict | Paid calls | Delivered | Settlements | Attestation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `/good` | Fast JSON, as declared | 100 | **trusted** | 5 | 5 | [1](https://stellar.expert/explorer/testnet/tx/47712ba238a0930e08f741d08ec5d65da152b02c0e82306444ec7a9b49c1b8fe) [2](https://stellar.expert/explorer/testnet/tx/b9917e6f4f4386f101ba7d1b7142c313fcb86fe5df45402871d998e72177f370) [3](https://stellar.expert/explorer/testnet/tx/ab45268ad5ae3bf4bc0d13d21277c8c828f53c8ca04544a5d8a6c3e6b24a2feb) [4](https://stellar.expert/explorer/testnet/tx/1f4188f199987a6727871388890fe0f5916a86387cd5f1dcd07abff8338fe882) [5](https://stellar.expert/explorer/testnet/tx/995937ca91e0cf6d90e68599827f2a93db6d0328cb3b622f79e9c4d22628234a) | [tx](https://stellar.expert/explorer/testnet/tx/fe2741752c495f045ba3422f058e06df37d22810993a1236f454a1e3bf6c72e5) |
-| `/slow` | Correct JSON after 3.5 s | 95 | **trusted** | 5 | 5 | [1](https://stellar.expert/explorer/testnet/tx/756160ce9053fb0f6da8631646b03361725e9748f4da658d8812b14a3a82405b) [2](https://stellar.expert/explorer/testnet/tx/f028b62c34602fbb5fbddca6f57a25370fc315e1b43b09cbac5d6d2e38e7a57d) [3](https://stellar.expert/explorer/testnet/tx/8fec6f747cf653e3a6a5170ad7c74c2bbbf5f2e9232e3ca44576336d410fb54f) [4](https://stellar.expert/explorer/testnet/tx/3355f2cf6481d3b04dfbe131977cedc9b23468505de351bcb16c9aaa47df9d10) [5](https://stellar.expert/explorer/testnet/tx/cd62ede215162455e0cf05d1aa022a6e9fb409a6be0a98bf83be733d16537378) | [tx](https://stellar.expert/explorer/testnet/tx/1a002383bd691cc3a89fbe66db29ccefb81d80fb0460a1f04bb9ffcb86b81f07) |
-| `/wrong-type` | Declares JSON, returns HTML | 40 | **caution** | 5 | 0 | [1](https://stellar.expert/explorer/testnet/tx/9cbc2bc3ea4ea44a80bf10f00ef8712283715dca59aa4dac67d89964ff6abdb0) [2](https://stellar.expert/explorer/testnet/tx/99cee299a0950146cb69302c9c548cd35f473ae49b4f40a917b5c3b0b243af1e) [3](https://stellar.expert/explorer/testnet/tx/c735a0eb19fabcea2bff988fc9caddf1ca39570b6eb5c26df057adf02a1de764) [4](https://stellar.expert/explorer/testnet/tx/a67cb13b1bd49d0af2101e014c9dd808d735160a7747c448a854e09fdae4fd96) [5](https://stellar.expert/explorer/testnet/tx/ca09557934ddebf79e2cd170d39cf743f8c747a01ae9d57ad54ce60bb236b46a) | [tx](https://stellar.expert/explorer/testnet/tx/241590dc160cdcbeadcca6301962ad6ee9d551d32e9f043ce7e1203e8c6e4774) |
-| `/broken` | Returns HTTP 500 | 10 | **avoid** | 5 | 0 | none | [tx](https://stellar.expert/explorer/testnet/tx/8f8946de958fede85daafa12facd1a0a8e05591865e4d739813180b66ff24965) |
+| `/good` | Fast JSON, as declared | 100 | **trusted** | 5 | 5 | [1](https://stellar.expert/explorer/testnet/tx/d563619199aa06c669aef2206427abcc4dc2b2d9e686a19c9037e52e96f25916) [2](https://stellar.expert/explorer/testnet/tx/69a2e98e2d51143db0c3be01fad8efc3990f39352cf05446593484a080473de4) [3](https://stellar.expert/explorer/testnet/tx/af34c6d75692844256e7de2f86181e1bbd8f51a72047961f9cfedf74e7ce5a74) [4](https://stellar.expert/explorer/testnet/tx/90ef00a36c0e2abc8e73f1fb320a1186aeedb20a45ee3fdce1404492072aafd2) [5](https://stellar.expert/explorer/testnet/tx/bcdfa474c190b58a91929681e1717a83b10bf9a65aca285105b3109262d1de80) | [tx](https://stellar.expert/explorer/testnet/tx/4bf350560af1f474282a93966937dd7c9f934db097ae97d660541f34fcdcdeeb) |
+| `/slow` | Correct JSON after 3.5 s | 95 | **trusted** | 5 | 5 | [1](https://stellar.expert/explorer/testnet/tx/39b02e881c69414ee8549c5ab27db74bf5b577d3c85560596750e81bfb28a259) [2](https://stellar.expert/explorer/testnet/tx/15e0413e329dc239e5014a920a96b7479e16b8b69283ed7fa2c8df945079c607) [3](https://stellar.expert/explorer/testnet/tx/ef245a16c6af2d12aca12464e401f7ef860a70d18d9c27edb45fb3836aa060f5) [4](https://stellar.expert/explorer/testnet/tx/c656b1cf43ad4681f1d34f73832ad537a9f1a7195ae5278f9367c4942cde31eb) [5](https://stellar.expert/explorer/testnet/tx/696e1ab14187fb39ac81d7cfbf2fab236810f24b76fc2314698f0bdbeeae52c6) | [tx](https://stellar.expert/explorer/testnet/tx/38160aad3a69b28319b43cd49b91c55ff2b30d3a3e453e6d133a2a1ca7a32b83) |
+| `/wrong-type` | Declares JSON, returns HTML | 40 | **caution** | 5 | 0 | [1](https://stellar.expert/explorer/testnet/tx/6b73f146beb856777148db7e5f7e57925ddea18b2719e8d0d207153fcf56bd5b) [2](https://stellar.expert/explorer/testnet/tx/4801d5eaa3d758922abb3cdd30b817675dc176238126075deface82d3464bf60) [3](https://stellar.expert/explorer/testnet/tx/94a55f678350b45b13b86abad2d628d9b6b3df620241cf8f14212b00da416e85) [4](https://stellar.expert/explorer/testnet/tx/16dbcd1cfe57aa3927af6053bbf2032a9373132c4e5e75678fe2ca68123a7a66) [5](https://stellar.expert/explorer/testnet/tx/dfc4a25aa92a314110fc8dd827cc5e137450f1f76845387e86e3c5e29377e2e1) | [tx](https://stellar.expert/explorer/testnet/tx/459f05acdf4d710540171f2ce9081f57b4eafe2b42db88c1380add7a80090785) |
+| `/broken` | Returns HTTP 500 | 10 | **avoid** | 5 | 0 | none | [tx](https://stellar.expert/explorer/testnet/tx/e554d200fee2f7adf5b9c915eede504eea2ff076e040acefbb9a0c03c798d414) |
 
 Score parts (delivery 60, price 20, latency 10, declaration 10):
 
@@ -25,4 +25,13 @@ Score parts (delivery 60, price 20, latency 10, declaration 10):
 ## Agent with the trust guard
 
 - `/good`: paid
-- `/broken`: refused — verdict avoid: onchain attestation: score 10, 0 of 5 paid calls delivered (contract CC7CQCVV6DZBX3DZM3YNYQTKP4JXIHVGAYF6SZ3HXGD2AFYP3LJKOR7U)
+- `/broken`: refused — verdict avoid: onchain attestation: score 10, 0 of 5 paid calls delivered (contract CBIWC2RJLR2SLEL2SUCKLZ5SZVLX7ET2CFPNPI23F6SQ6FFVIUOWSKUO)
+
+## Stellar's official x402 demo (unpaid conformance check)
+
+Discovered through [its manifest](https://stellar.org/x402-demo/api/.well-known/x402).
+
+| Resource | HTTP | Stellar networks | Issues |
+| --- | --- | --- | --- |
+| https://stellar.org/x402-demo/api/weather/testnet?city=Valencia | 402 | stellar:testnet | none |
+| https://stellar.org/x402-demo/api/weather/mainnet?city=Valencia | 402 | stellar:pubnet | none |
