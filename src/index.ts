@@ -6,3 +6,6 @@ export { checkBeforePay, type CheckResult } from './check.js';
 export { fromFacilitator, fromSeedFile, type Discovered } from './indexer.js';
 export { Store, type EndpointRecord } from './store.js';
 export { createApi } from './api.js';
+export { withTrustGuard, apiChecker, localChecker, type TrustGuardOptions, type Checker } from './guard.js';
+export { chainConfigFromEnv, readAttestation, writeAttestation, deployContract, toAttestation, reportHash, latestLedger, type ChainConfig, type OnchainAttestation } from './chain.js';
+export { type OnchainView } from './check.js';

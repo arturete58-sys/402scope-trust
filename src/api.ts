@@ -3,6 +3,7 @@ import { checkBeforePay } from './check.js';
 import { assertPublicUrl } from './probe.js';
 import { METHOD_VERSION } from './score.js';
 import type { EndpointRecord, Store } from './store.js';
+import type { ChainConfig } from './chain.js';
 
 const hits = new Map<string, number[]>();
 function limited(ip: string, perMinute: number): boolean {
@@ -23,6 +24,7 @@ function summary(r: EndpointRecord) {
     score: r.score?.score ?? null,
     paidCalls: r.score?.calls ?? 0,
     lowSample: r.score?.lowSample ?? true,
+    attestation: r.attestation ?? null,
     issues: r.probe?.issues.length ?? null,
     updatedAt: r.updatedAt,
   };
@@ -45,7 +47,7 @@ function send(res: http.ServerResponse, status: number, body: unknown): void {
  *   GET /v1/endpoints/:key           full record, including paid calls
  *   GET /v1/check?url=...&min_score= the check-before-pay answer (probes unknown URLs, rate-limited)
  */
-export function createApi(store: Store, opts: { checksPerMinute?: number } = {}): http.Server {
+export function createApi(store: Store, opts: { checksPerMinute?: number; chain?: ChainConfig | null } = {}): http.Server {
   return http.createServer(async (req, res) => {
     // Trust X-Forwarded-For only from a reverse proxy on the same machine.
     const direct = req.socket.remoteAddress ?? '';
@@ -55,7 +57,7 @@ export function createApi(store: Store, opts: { checksPerMinute?: number } = {})
     if (req.method !== 'GET') return send(res, 405, { error: 'Use GET.' });
     const u = new URL(req.url ?? '/', 'http://x');
     try {
-      if (u.pathname === '/health') return send(res, 200, { ok: true, endpoints: store.all().length, method: METHOD_VERSION });
+      if (u.pathname === '/health') return send(res, 200, { ok: true, endpoints: store.all().length, method: METHOD_VERSION, contract: opts.chain?.contractId ?? null });
       if (u.pathname === '/v1/endpoints') {
         const net = u.searchParams.get('network');
         const min = Number(u.searchParams.get('min_score') ?? 0);
@@ -78,7 +80,7 @@ export function createApi(store: Store, opts: { checksPerMinute?: number } = {})
         const known = !!store.get(target)?.probe;
         if (!known && limited(ip, opts.checksPerMinute ?? 20)) return send(res, 429, { error: 'Too many new checks. Try again in a minute.' });
         const min = Math.min(100, Math.max(0, Number(u.searchParams.get('min_score') ?? 80) || 0));
-        return send(res, 200, await checkBeforePay(store, target, min));
+        return send(res, 200, await checkBeforePay(store, target, min, { chain: opts.chain }));
       }
       return send(res, 404, { error: 'Not found. See /v1/endpoints and /v1/check.' });
     } catch {

@@ -120,3 +120,41 @@ test('MCP server lists its tools and answers check_before_pay', async () => {
   assert.equal(r.result.structuredContent.verdict, 'unknown');
   assert.match(r.result.content[0].text, /^UNKNOWN/);
 });
+
+test('probe accepts the challenge of the official @x402/express seller, and the trust guard blocks an unmeasured endpoint', async () => {
+  const { default: express } = await import('express');
+  const { x402Facilitator } = await import('@x402/core/facilitator');
+  const { x402Client } = await import('@x402/core/client');
+  const { wrapFetchWithPayment } = await import('@x402/fetch');
+  const { paymentMiddleware, x402ResourceServer } = await import('@x402/express');
+  const { createEd25519Signer } = await import('@x402/stellar');
+  const { ExactStellarScheme: F } = await import('@x402/stellar/exact/facilitator');
+  const { ExactStellarScheme: S } = await import('@x402/stellar/exact/server');
+  const { ExactStellarScheme: C } = await import('@x402/stellar/exact/client');
+  const { withTrustGuard, localChecker } = await import('../guard.js');
+  const fac = new x402Facilitator().register('stellar:testnet', new F([createEd25519Signer(Keypair.random().secret(), 'stellar:testnet')]));
+  const fc = { verify: (p: any, r: any) => fac.verify(p, r), settle: (p: any, r: any) => fac.settle(p, r), getSupported: async () => fac.getSupported() };
+  const rs = new x402ResourceServer(fc as never).register('stellar:testnet', new S());
+  const app = express();
+  app.use(paymentMiddleware({ 'GET /data': { accepts: { scheme: 'exact', network: 'stellar:testnet', payTo: PAY_TO, price: { amount: '10000', asset: USDC_TESTNET_ADDRESS } }, description: 'Data', mimeType: 'application/json' } } as never, rs));
+  app.get('/data', (_q: any, s: any) => s.json({ ok: true }));
+  const h = await new Promise<http.Server>((ok) => { const x = app.listen(0, '127.0.0.1', () => ok(x)); });
+  const url = `http://127.0.0.1:${(h.address() as { port: number }).port}/data`;
+  try {
+    const p = await probe(url);
+    assert.equal(p.status, 402);
+    assert.deepEqual(p.issues, []);
+    assert.equal(p.stellar[0].payTo, PAY_TO);
+
+    const store = new Store(path.join(dir, 'guard.json'));
+    const decisions: { paid: boolean; reason?: string }[] = [];
+    const agent = withTrustGuard(
+      x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new C(createEd25519Signer(Keypair.random().secret(), 'stellar:testnet')) }], spendControls: false }),
+      { check: localChecker(store), onDecision: (d) => decisions.push(d) },
+    );
+    await assert.rejects(wrapFetchWithPayment(fetch, agent)(url), /not measured yet/);
+    assert.deepEqual(decisions.map((d) => d.paid), [false]);
+  } finally {
+    h.close();
+  }
+});

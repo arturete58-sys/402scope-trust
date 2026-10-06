@@ -42,12 +42,18 @@ export interface MeasureOptions {
 export async function measurePaid(url: string, opts: MeasureOptions): Promise<PaidCall> {
   const signer = createEd25519Signer(opts.secret, opts.network);
   let chosen: PaymentRequirements | null = null;
-  const client = new x402Client((_v: number, accepts: PaymentRequirements[]) => {
-    const ok = accepts.filter((a) => a.network === opts.network && BigInt(a.amount) <= opts.maxAmount);
-    if (!ok.length) throw new Error(`no ${opts.network} option at or below ${opts.maxAmount}`);
-    chosen = ok.sort((a, b) => (BigInt(a.amount) < BigInt(b.amount) ? -1 : 1))[0];
-    return chosen;
-  }).register('stellar:*', new ExactStellarScheme(signer, opts.rpcUrl ? { url: opts.rpcUrl } : undefined));
+  // Spend limits are ours: only the configured network, never above maxAmount.
+  // Built-in spend controls are off so test tokens (not only USDC) can be measured.
+  const client = x402Client.fromConfig({
+    schemes: [{ network: 'stellar:*', client: new ExactStellarScheme(signer, opts.rpcUrl ? { url: opts.rpcUrl } : undefined) }],
+    spendControls: false,
+    policies: [(_v: number, reqs: PaymentRequirements[]) => reqs.filter((a) => a.network === opts.network && BigInt(a.amount) <= opts.maxAmount)],
+    paymentRequirementsSelector: (_v: number, reqs: PaymentRequirements[]) => {
+      if (!reqs.length) throw new Error(`no ${opts.network} option at or below ${opts.maxAmount}`);
+      chosen = [...reqs].sort((a, b) => (BigInt(a.amount) < BigInt(b.amount) ? -1 : 1))[0];
+      return chosen;
+    },
+  });
   const paidFetch = wrapFetchWithPayment(fetch, client);
   const http = new x402HTTPClient(client);
   const call: PaidCall = { at: new Date().toISOString(), ok: false, status: null, latencyMs: null, declaredAmount: null, transaction: null, contentType: null, bytes: 0, delivered: false };

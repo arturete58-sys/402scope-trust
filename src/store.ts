@@ -19,6 +19,8 @@ export interface EndpointRecord {
   /** Most recent paid calls, newest last (capped). */
   calls: PaidCall[];
   score: Score | null;
+  /** Last attestation written onchain for this endpoint. */
+  attestation?: { tx: string; expiresLedger: number; score: number; at: string };
   updatedAt: string;
 }
 
@@ -84,6 +86,10 @@ export class Store {
     r.calls.push(c);
     if (r.calls.length > MAX_CALLS) r.calls.splice(0, r.calls.length - MAX_CALLS);
     r.updatedAt = new Date().toISOString();
+  }
+
+  setAttestation(url: string, a: NonNullable<EndpointRecord['attestation']>): void {
+    this.data[normalizeUrl(url)].attestation = a;
   }
 
   setScore(url: string, s: Score): void {

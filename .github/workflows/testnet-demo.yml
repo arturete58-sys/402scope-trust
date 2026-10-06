@@ -1,0 +1,67 @@
+name: Testnet demo
+
+# Runs the full flow on Stellar testnet: deploy the contract, run a seller and
+# a facilitator, measure with real paid calls, write attestations onchain and
+# read them back. Results (contract ID and transaction links) are attached to
+# the run as demo-result.json and printed in the job summary.
+
+on:
+  workflow_dispatch:
+    inputs:
+      calls:
+        description: Paid calls per endpoint
+        default: '5'
+  push:
+    branches: [main]
+    paths: ['src/**', 'contracts/**', '.github/workflows/testnet-demo.yml']
+
+concurrency:
+  group: testnet-demo
+  cancel-in-progress: false
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts/attestations
+      - name: Build contract
+        working-directory: contracts/attestations
+        run: cargo build --target wasm32v1-none --release
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Run the testnet demo
+        run: node dist/demo/testnet.js --wasm contracts/attestations/target/wasm32v1-none/release/scope_attestations.wasm --calls "${{ github.event.inputs.calls || '5' }}" --out demo-result.json
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f demo-result.json ]; then
+            node -e '
+              const r = require("./demo-result.json");
+              const out = [];
+              out.push("## 402Scope Trust on Stellar testnet", "");
+              out.push(`Contract: [${r.contractId}](${r.contractUrl})`, "");
+              out.push("| Endpoint | Score | Verdict | Paid calls | Delivered | Attestation |", "| --- | --- | --- | --- | --- | --- |");
+              for (const e of r.endpoints || []) out.push(`| ${e.endpoint} | ${e.score?.score} | ${e.verdict} | ${e.score?.calls} | ${e.score?.delivered} | [tx](${e.attestationTx}) |`);
+              out.push("", "Agent with the trust guard:", "");
+              for (const d of r.agentDecisions || []) out.push(`- ${d.url}: ${d.paid ? "paid" : "refused (" + d.reason + ")"}`);
+              require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, out.join("\n") + "\n");
+              console.log(out.join("\n"));
+            '
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: demo-result
+          path: demo-result.json
+          if-no-files-found: ignore

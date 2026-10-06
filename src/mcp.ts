@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { checkBeforePay, type CheckResult } from './check.js';
 import { Store } from './store.js';
+import { chainConfigFromEnv } from './chain.js';
 
 /**
  * MCP server for agents. With TRUST_API_URL set (e.g. the public 402Scope
@@ -11,9 +12,10 @@ import { Store } from './store.js';
 export async function runMcp(): Promise<void> {
   const api = process.env.TRUST_API_URL?.replace(/\/+$/, '');
   const store = api ? null : Store.open();
+  const chain = chainConfigFromEnv();
 
   const check = async (url: string, minScore: number): Promise<CheckResult> => {
-    if (!api) return checkBeforePay(store as Store, url, minScore);
+    if (!api) return checkBeforePay(store as Store, url, minScore, { chain });
     const r = await fetch(`${api}/v1/check?url=${encodeURIComponent(url)}&min_score=${minScore}`, { signal: AbortSignal.timeout(20_000) });
     if (!r.ok) throw new Error(`402Scope API returned ${r.status}`);
     return (await r.json()) as CheckResult;

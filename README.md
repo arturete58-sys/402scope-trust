@@ -16,14 +16,16 @@ Part of the [402Scope observatory](https://402scope.org). Applying to the Stella
 
 | Piece | State |
 | --- | --- |
-| Unpaid probe of the 402 challenge (x402 v2, Stellar `exact`) | Working, tested |
-| Paid measurement through the standard x402 client (`@x402/stellar`) | Working, needs a funded testnet wallet |
+| Unpaid probe of the 402 challenge (x402 v2, Stellar `exact`) | Working, tested against the official `@x402/express` seller |
+| Paid measurement through the standard x402 client (`@x402/stellar`) | Working |
 | Scoring method v1 | Working, tested — [docs/scoring.md](docs/scoring.md) |
-| Public read API | Working, tested |
-| MCP server (`check_before_pay`, `list_trusted_endpoints`) | Working, tested |
-| Bazaar discovery indexer | Working against `GET /discovery/resources` |
 | Soroban attestation contract | Working, 9 tests — [docs/attestation-spec.md](docs/attestation-spec.md) |
-| Testnet deployment, writing attestations onchain | Next (SCF tranche 2) |
+| Writing and reading attestations onchain | Working (`scope-trust attest`, `check_before_pay`) |
+| Trust guard for any x402 client | Working, tested — aborts payments to untrusted endpoints |
+| MCP server (`check_before_pay`, `list_trusted_endpoints`) | Working, tested |
+| Public read API | Working, tested |
+| Bazaar discovery indexer | Working against `GET /discovery/resources` |
+| End-to-end testnet demo in CI | [Testnet demo workflow](.github/workflows/testnet-demo.yml) |
 | Smart-account spending policy example | Next (SCF tranche 2) |
 | Mainnet, audit, provider passport | SCF tranche 3 |
 
@@ -66,6 +68,23 @@ The tool returns a verdict:
 | `avoid` | not pay |
 | `unknown` | ask the user |
 
+### Guard any x402 client
+
+```ts
+import { x402Client } from '@x402/core/client';
+import { wrapFetchWithPayment } from '@x402/fetch';
+import { withTrustGuard, apiChecker } from '402scope-trust';
+
+const client = withTrustGuard(x402Client.fromConfig({ schemes: [/* your Stellar scheme */] }), {
+  check: apiChecker('https://<402scope-trust-api>'),
+  minScore: 80,
+});
+const pay = wrapFetchWithPayment(fetch, client);
+await pay('https://api.example.com/paid-data'); // throws instead of paying an untrusted endpoint
+```
+
+The guard also refuses when the `payTo` being paid differs from the one that was measured.
+
 ### Run the observatory
 
 ```bash
@@ -73,6 +92,7 @@ node dist/cli.js index --facilitator https://<facilitator> --seeds seeds.txt
 node dist/cli.js run                              # unpaid probes only
 MEASURE_SECRET=S... node dist/cli.js run --paid   # plus real paid calls (testnet by default)
 node dist/cli.js serve --port 8403                # public read API
+TRUST_CONTRACT_ID=C... TRUST_SIGNER_SECRET=S... node dist/cli.js attest   # write scores onchain
 ```
 
 Paid measurement settings: `MEASURE_SECRET` (a dedicated, low-balance wallet), `MEASURE_NETWORK` (`stellar:testnet` or `stellar:pubnet`), `MEASURE_MAX_AMOUNT` (in token units; default 100000 = 0.01 USDC), `STELLAR_RPC_URL` (required on pubnet).
@@ -87,6 +107,8 @@ Paid measurement settings: `MEASURE_SECRET` (a dedicated, low-balance wallet), `
 | `GET /health` | Service status |
 
 ### Contract
+
+The [testnet demo workflow](.github/workflows/testnet-demo.yml) deploys the contract, runs a seller with four endpoints (good, slow, wrong content type, broken), measures them with real paid calls, writes the attestations onchain and reads them back. Each run lists the contract ID and every transaction in its summary.
 
 ```bash
 cd contracts/attestations
