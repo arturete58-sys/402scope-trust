@@ -1,0 +1,2 @@
+# x402 endpoints on Stellar to measure, one URL per line.
+# Endpoints found through facilitator discovery are added automatically by `scope-trust index`.

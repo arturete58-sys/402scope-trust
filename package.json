@@ -1,0 +1,41 @@
+{
+  "name": "402scope-trust",
+  "version": "0.1.0",
+  "description": "Verification layer for x402 on Stellar: measure endpoints, attest onchain, check before paying.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "scope-trust": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/test/unit.test.js dist/test/integration.test.js",
+    "start": "node dist/cli.js serve",
+    "mcp": "node dist/cli.js mcp"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arturete58-sys/402scope-trust.git"
+  },
+  "homepage": "https://402scope.org",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@stellar/stellar-sdk": "^16.3.1",
+    "@x402/core": "^2.28.0",
+    "@x402/fetch": "^2.28.0",
+    "@x402/stellar": "^2.28.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
+  }
+}

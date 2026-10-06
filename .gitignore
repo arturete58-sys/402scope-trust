@@ -1,0 +1,7 @@
+node_modules/
+dist/
+data/
+target/
+*.wasm
+.env
+contracts/attestations/test_snapshots/

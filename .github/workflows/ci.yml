@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts/attestations
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts/attestations
+      - run: cargo test
+      - run: cargo build --target wasm32v1-none --release
+      - run: ls -l target/wasm32v1-none/release/scope_attestations.wasm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scope_attestations.wasm
+          path: contracts/attestations/target/wasm32v1-none/release/scope_attestations.wasm
