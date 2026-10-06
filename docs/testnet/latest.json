@@ -1,0 +1,167 @@
+{
+  "network": "stellar:testnet",
+  "startedAt": "2026-10-06T15:50:49.048Z",
+  "accounts": {
+    "admin": "GBS7JGIWMFUSUXWU6C3JD2OPKSD3DX44OVPA6SRRLYOJ7ALWQ3EOLBMU",
+    "signer": "GADE6MQT6F5Q5DXBASISVM7G7SMTTTXRYTSRUE6D7OEHHRQRCHTTQO33",
+    "issuer": "GDGV3NIV2OZL3QPAPN54FGLLOU4QORIEWH3FQDBCFHMLMCJOYTCAO6YT",
+    "seller": "GDZX6THTOFTG2CLKAP54EWQQKMVWAEQUT5RL277BSIGXE7LIUHSPWPLY",
+    "buyer": "GCNU72DMJOD7YO4DFKJRVQ6P5YUQLRM7M4W64UWYXSVOGKCPFMBG5KG7",
+    "facilitator": "GCQHMVY2SCFAUVFZUSTPZYWT5XL6U4QRRL2Z2QJMJECCS2KKXDOEIDSV"
+  },
+  "contractId": "CAX3I25VUGV2M324AWZ3BAD7L7XIC7EW2U3LXVUGPRJ3KBDNB3G52EAQ",
+  "contractUrl": "https://stellar.expert/explorer/testnet/contract/CAX3I25VUGV2M324AWZ3BAD7L7XIC7EW2U3LXVUGPRJ3KBDNB3G52EAQ",
+  "token": "CDY4VDMKC2QPKOCYBS5TQCAL6MNQ7KQO3KV32H7POMBQJN7TAOYRLZOJ",
+  "endpoints": [
+    {
+      "endpoint": "/good",
+      "key": "9d66c23d58a664bc125fa605d801d356efa7f7c05e8210d7283c6d79c9fed99f",
+      "score": {
+        "method": 1,
+        "score": 90,
+        "calls": 5,
+        "delivered": 5,
+        "priceOk": true,
+        "p50Ms": 5322,
+        "lowSample": false,
+        "parts": {
+          "delivery": 60,
+          "price": 20,
+          "latency": 0,
+          "declaration": 10
+        }
+      },
+      "settlements": [
+        "https://stellar.expert/explorer/testnet/tx/f13dab2d4e5b02205962dcd51c8183988c40303978f15a06658fb6674fb14b9f",
+        "https://stellar.expert/explorer/testnet/tx/f25125c8f767ed8f405c3ab73fcf6d274d00810075d8f00b4949b9550c57f912",
+        "https://stellar.expert/explorer/testnet/tx/67a637450ed9eb2465a463cc7fab4a4baba88cb2380808e7b42d24e91218ad0a",
+        "https://stellar.expert/explorer/testnet/tx/0fe8ebcddcbd513076051dc910ad7484219f30da225c6456aa70e6eae6abfacd",
+        "https://stellar.expert/explorer/testnet/tx/a4b1f715888a4c4f85007511adbe1fd657f7aebd82a15f5dfabbf9558eb3378a"
+      ],
+      "errors": [],
+      "attestationTx": "https://stellar.expert/explorer/testnet/tx/98cbf7554e61fde324d2d73d151c279629285b69df30d8c0243e3e196fbefef9",
+      "verdict": "trusted",
+      "onchain": {
+        "contractId": "CAX3I25VUGV2M324AWZ3BAD7L7XIC7EW2U3LXVUGPRJ3KBDNB3G52EAQ",
+        "score": 90,
+        "expiresLedger": 5176629,
+        "current": true
+      }
+    },
+    {
+      "endpoint": "/slow",
+      "key": "1213301350262ffc4e25c071dd86e47d10d9f47880f40c3ad8a39e400b0b8b42",
+      "score": {
+        "method": 1,
+        "score": 90,
+        "calls": 5,
+        "delivered": 5,
+        "priceOk": true,
+        "p50Ms": 8905,
+        "lowSample": false,
+        "parts": {
+          "delivery": 60,
+          "price": 20,
+          "latency": 0,
+          "declaration": 10
+        }
+      },
+      "settlements": [
+        "https://stellar.expert/explorer/testnet/tx/b1c8c6ef233aed6ca489e8d76c56ab37de87e77874370c7cdbb428df6d486278",
+        "https://stellar.expert/explorer/testnet/tx/1bbd8f39af065df6ba2e5dbb93a6f7d1f68e863e49e1b40b36fcc25490994fdb",
+        "https://stellar.expert/explorer/testnet/tx/7b06c3b6c78768be05fc4eabbf72696bf7a92a05ed880dd1826d5fe1ad565466",
+        "https://stellar.expert/explorer/testnet/tx/a0dae2863ce2ba53fd6981c7b4f1b1534d472c544dc2cfd073920d158bb8cc48",
+        "https://stellar.expert/explorer/testnet/tx/677631865ed9433313a9c9cc21b3970d6e0fd13d60427bcaefc56942f1564987"
+      ],
+      "errors": [],
+      "attestationTx": "https://stellar.expert/explorer/testnet/tx/ea4e6418ebc70c029dec5cdd9b752a4e01c891f9f7f1d15b60ede8a84fac9cbf",
+      "verdict": "trusted",
+      "onchain": {
+        "contractId": "CAX3I25VUGV2M324AWZ3BAD7L7XIC7EW2U3LXVUGPRJ3KBDNB3G52EAQ",
+        "score": 90,
+        "expiresLedger": 5176638,
+        "current": true
+      }
+    },
+    {
+      "endpoint": "/wrong-type",
+      "key": "69b3535158be372268450ce81f2724cc7f00ed5310aeae789e3ea78e4604b2f2",
+      "score": {
+        "method": 1,
+        "score": 30,
+        "calls": 5,
+        "delivered": 0,
+        "priceOk": true,
+        "p50Ms": 5421,
+        "lowSample": false,
+        "parts": {
+          "delivery": 0,
+          "price": 20,
+          "latency": 0,
+          "declaration": 10
+        }
+      },
+      "settlements": [
+        "https://stellar.expert/explorer/testnet/tx/6346822174be0c850bfd00040f1113f60742ca39850e9b5874e3c160f605a2ca",
+        "https://stellar.expert/explorer/testnet/tx/35ff8a772f48fc7619d6cac20684551bc57a00126ceb20ffcbc2c0723022d2be",
+        "https://stellar.expert/explorer/testnet/tx/9e30ab5c14b50bbc1fc22a9693f8e9666df13278519e5fb9d9bac169a440eaf6",
+        "https://stellar.expert/explorer/testnet/tx/5c804dc835cada0b06b4b28903191598a9a46136713dd95078241af6c5638349",
+        "https://stellar.expert/explorer/testnet/tx/033cee6668abe9bdf85bb591328f7a81cce7d5e61cae5c4e5f339e009ffced73"
+      ],
+      "errors": [
+        "declared application/json, got text/html; charset=utf-8"
+      ],
+      "attestationTx": "https://stellar.expert/explorer/testnet/tx/00d49cb78d4c70fe41f22eacb1d0cbbf97a46564fd86bb0f7340c1bf1949d965",
+      "verdict": "avoid",
+      "onchain": {
+        "contractId": "CAX3I25VUGV2M324AWZ3BAD7L7XIC7EW2U3LXVUGPRJ3KBDNB3G52EAQ",
+        "score": 30,
+        "expiresLedger": 5176644,
+        "current": true
+      }
+    },
+    {
+      "endpoint": "/broken",
+      "key": "2df07421b2463cb7cfaf742884c802840b5bece33db3fbca2ba75418a8054c5d",
+      "score": {
+        "method": 1,
+        "score": 10,
+        "calls": 5,
+        "delivered": 0,
+        "priceOk": false,
+        "p50Ms": null,
+        "lowSample": false,
+        "parts": {
+          "delivery": 0,
+          "price": 0,
+          "latency": 0,
+          "declaration": 10
+        }
+      },
+      "settlements": [],
+      "errors": [
+        "no PAYMENT-RESPONSE header"
+      ],
+      "attestationTx": "https://stellar.expert/explorer/testnet/tx/6b5628c7879952f130d8c6fc66c7ea8fef60595b123d1f075d82e3fed304d0a5",
+      "verdict": "avoid",
+      "onchain": {
+        "contractId": "CAX3I25VUGV2M324AWZ3BAD7L7XIC7EW2U3LXVUGPRJ3KBDNB3G52EAQ",
+        "score": 10,
+        "expiresLedger": 5176645,
+        "current": true
+      }
+    }
+  ],
+  "agentDecisions": [
+    {
+      "url": "/good",
+      "paid": true
+    },
+    {
+      "url": "/broken",
+      "paid": false,
+      "reason": "verdict avoid: onchain attestation: score 10, 0 of 5 paid calls delivered (contract CAX3I25VUGV2M324AWZ3BAD7L7XIC7EW2U3LXVUGPRJ3KBDNB3G52EAQ)"
+    }
+  ],
+  "finishedAt": "2026-10-06T15:53:42.530Z"
+}
