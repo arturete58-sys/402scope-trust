@@ -7,8 +7,8 @@ Scores are out of 100 and built from four parts.
 | Part | Points | How it is measured |
 | --- | --- | --- |
 | Delivery | 60 | Share of paid calls that were delivered: HTTP 2xx, settled (a `PAYMENT-RESPONSE` with a transaction hash), non-empty body, and the content type declared in `resource.mimeType` |
-| Price | 20 | Every settled call charged the amount declared in the 402 challenge |
-| Latency | 10 | Median latency of paid calls: up to 1 s = 10, up to 3 s = 5, slower = 0 |
+| Price | 20 | Every paid call settled at the amount declared in the 402 challenge. With the `exact` scheme the client signs the exact amount, so today this mostly checks that settlement happened; it becomes a real comparison with metered schemes such as `upto` |
+| Latency | 10 | Median latency of paid calls: up to 7 s = 10, up to 12 s = 5, slower = 0. Paid latency includes onchain settlement, which x402 servers complete before answering (about one ledger, ~5 s on Stellar) |
 | Declaration | 10 | The unpaid 402 challenge conforms to x402 v2 for Stellar; minus 2 per issue found |
 
 ## Rules

@@ -35,8 +35,8 @@ test('score: perfect endpoint gets 100', () => {
 });
 
 test('score: failed deliveries and slow responses cost points', () => {
-  // Median latency 2000 ms -> 5 points; 3 of 5 delivered -> 36 points.
-  const calls = [call({ latencyMs: 1500 }), call({ delivered: false, latencyMs: 5000 }), call({ latencyMs: 2500 }), call({ delivered: false, latencyMs: 2000 }), call({})];
+  // Median latency 9000 ms -> 5 points; 3 of 5 delivered -> 36 points.
+  const calls = [call({ latencyMs: 9500 }), call({ delivered: false, latencyMs: 15000 }), call({ latencyMs: 8000 }), call({ delivered: false, latencyMs: 9000 }), call({})];
   const s = scoreEndpoint([{ code: 'fees', message: 'x' }], calls);
   assert.deepEqual(s.parts, { delivery: 36, price: 20, latency: 5, declaration: 8 });
   assert.equal(s.score, 69);

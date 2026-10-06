@@ -10,6 +10,8 @@ Indexer → Measurer → Scorer + signer → Soroban contract
             AI agent → check_before_pay (MCP / SDK) → pay only if trusted
 ```
 
+**Live on Stellar testnet:** see the [latest end-to-end run](docs/testnet/README.md): contract, real paid calls, scores, attestations and an agent refusing a broken endpoint, every step a transaction you can open.
+
 Part of the [402Scope observatory](https://402scope.org). Applying to the Stellar Community Fund (SCF #46, Open Track).
 
 ## Status
