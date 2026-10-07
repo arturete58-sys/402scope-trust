@@ -16,7 +16,7 @@ v1 had a single signer chosen by the admin. v2 opens the role: anyone who locks 
 
 A bond stays slashable during unbonding, so an attester cannot publish a false score and leave at once. Constructor: `__constructor(admin, bond_token, min_bond, unbond_ledgers)`.
 
-The admin can only slash, rotate itself (`set_admin`) and change the bond rules (`set_bond_rules`). It cannot write, edit or delete anyone's attestation. Before mainnet, slashing moves from a single admin to a dispute process; see the SCF proposal.
+The admin can only slash, rotate itself (`set_admin`) and change the bond rules (`set_bond_rules`). It cannot write, edit or delete anyone's attestation. Before mainnet, slashing moves from a single admin to a dispute process.
 
 ## Endpoint attestation
 

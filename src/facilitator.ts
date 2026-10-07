@@ -4,6 +4,7 @@ import { readSellerAttestation, trustedBy, type ChainConfig } from './chain.js';
 import { USER_AGENT } from './probe.js';
 import { sellerScores } from './seller.js';
 import type { Store } from './store.js';
+import type { ContributedResource } from './contributions.js';
 
 /**
  * 402Scope Trust for any facilitator.
@@ -16,6 +17,8 @@ import type { Store } from './store.js';
  * - `withTrustHooks` plugs into any `x402Facilitator` from @x402/core through
  *   its standard hooks. In `flag` mode it records a verdict for every payment;
  *   in `block` mode it refuses to verify payments to untrusted sellers.
+ *   With `share`, it also contributes the resources it settles to the
+ *   observatory (see contributions.ts).
  * - `rankResources` / `discoveryProxy` add trust scores to any facilitator's
  *   Bazaar listing (`GET /discovery/resources`) and rank it by them.
  *
@@ -102,10 +105,11 @@ export interface TrustDecision {
 }
 
 type Hook<C> = (ctx: C) => Promise<void | { abort: true; reason: string }>;
+type Ctx = { requirements: PaymentRequirements; paymentPayload?: { resource?: { url?: string } } };
 /** The part of @x402/core's `x402Facilitator` this module uses. */
 export interface HookableFacilitator {
-  onBeforeVerify(hook: Hook<{ requirements: PaymentRequirements }>): unknown;
-  onBeforeSettle(hook: Hook<{ requirements: PaymentRequirements }>): unknown;
+  onBeforeVerify(hook: Hook<Ctx>): unknown;
+  onBeforeSettle(hook: Hook<Ctx>): unknown;
 }
 
 /**
@@ -120,11 +124,21 @@ export interface HookableFacilitator {
  * the error: a trust outage must not become a payments outage. Set
  * `failClosed: true` to refuse instead.
  */
-export function withTrustHooks<F extends HookableFacilitator>(fac: F, o: { check: SellerChecker; mode?: 'flag' | 'block'; failClosed?: boolean; onDecision?: (d: TrustDecision) => void; cacheMs?: number }): F {
+export function withTrustHooks<F extends HookableFacilitator>(fac: F, o: {
+  check: SellerChecker;
+  mode?: 'flag' | 'block';
+  failClosed?: boolean;
+  onDecision?: (d: TrustDecision) => void;
+  cacheMs?: number;
+  /** Opt-in: share the resources this facilitator verifies (URL, network, payTo; never the payer). See `resourceSharer`. */
+  share?: { add(r: ContributedResource): void };
+}): F {
   const check = cached(o.check, o.cacheMs);
   const mode = o.mode ?? 'flag';
-  const decide: Hook<{ requirements: PaymentRequirements }> = async ({ requirements }) => {
+  const decide: Hook<Ctx> = async ({ requirements, paymentPayload }) => {
     const { payTo, network } = requirements;
+    const url = paymentPayload?.resource?.url;
+    if (o.share && url) { try { o.share.add({ url, network: String(network), payTo }); } catch { /* never in the payment path */ } }
     let verdict: SellerVerdict | null = null;
     let error: string | undefined;
     try {

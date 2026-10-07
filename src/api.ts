@@ -5,6 +5,7 @@ import { METHOD_VERSION } from './score.js';
 import type { EndpointRecord, Store } from './store.js';
 import type { ChainConfig } from './chain.js';
 import { sellerScores } from './seller.js';
+import { acceptContribution, contributorFor, contributorKeysFromEnv, parseContribution } from './contributions.js';
 
 const hits = new Map<string, number[]>();
 function limited(ip: string, perMinute: number): boolean {
@@ -48,16 +49,34 @@ function send(res: http.ServerResponse, status: number, body: unknown): void {
  *   GET /v1/endpoints/:key           full record, including paid calls
  *   GET /v1/check?url=...&min_score= the check-before-pay answer (probes unknown URLs, rate-limited)
  *   GET /v1/sellers/:payTo          seller score across its endpoints (used by facilitators)
+ *   POST /v1/contributions          partner facilitators share resources (Bearer contributor key)
  */
-export function createApi(store: Store, opts: { checksPerMinute?: number; chain?: ChainConfig | null } = {}): http.Server {
+export function createApi(store: Store, opts: { checksPerMinute?: number; chain?: ChainConfig | null; contributors?: Map<string, Buffer> } = {}): http.Server {
+  const contributors = opts.contributors ?? contributorKeysFromEnv();
   return http.createServer(async (req, res) => {
     // Trust X-Forwarded-For only from a reverse proxy on the same machine.
     const direct = req.socket.remoteAddress ?? '';
     const fwd = req.headers['x-forwarded-for'];
     const ip = fwd && /^(::ffff:)?127\.0\.0\.1$|^::1$/.test(direct) ? String(fwd).split(',')[0].trim() : direct;
     if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET' }); return res.end(); }
-    if (req.method !== 'GET') return send(res, 405, { error: 'Use GET.' });
     const u = new URL(req.url ?? '/', 'http://x');
+    if (req.method === 'POST' && u.pathname === '/v1/contributions') {
+      // Partner facilitators share resources from their Bazaar or from the payments they settle.
+      const who = contributorFor(contributors, req.headers.authorization);
+      if (!who) return send(res, 401, { error: 'A contributor key is required. Contributions are open to facilitators; ask hello@402scope.org.' });
+      if (limited(`contrib:${who}`, 30)) return send(res, 429, { error: 'Too many contributions. Try again in a minute.' });
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const c of req) {
+        size += (c as Buffer).length;
+        if (size > 1_000_000) return send(res, 413, { error: 'Up to 1 MB per contribution.' });
+        chunks.push(c as Buffer);
+      }
+      let body: unknown;
+      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return send(res, 400, { error: 'Send JSON: a Bazaar response or { resources: [{ url, network, payTo }] }.' }); }
+      return send(res, 200, { contributor: who, ...acceptContribution(store, who, parseContribution(body)) });
+    }
+    if (req.method !== 'GET') return send(res, 405, { error: 'Use GET (or POST /v1/contributions with a contributor key).' });
     try {
       if (u.pathname === '/health') return send(res, 200, { ok: true, endpoints: store.all().length, method: METHOD_VERSION, contract: opts.chain?.contractId ?? null });
       if (u.pathname === '/v1/endpoints') {

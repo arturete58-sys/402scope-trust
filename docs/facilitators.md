@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Agent with a smart account | Installs the trust policy; the wallet refuses untrusted sellers in `__check_auth` | None on the facilitator side, beyond a fee ceiling that accepts smart-account payments |
 | Seller | Publishes delivery terms and signed receipts | None on the facilitator side: extensions travel in the 402 challenge and the response |
-| Facilitator | Uses the trust signal: flags or refuses payments, ranks its Bazaar listing | `withTrustHooks` and `rankResources`, or the discovery proxy in front of it |
+| Facilitator | Uses the trust signal: flags or refuses payments, ranks its Bazaar listing; optionally shares its Bazaar and the resources it settles | `withTrustHooks` and `rankResources`, or the discovery proxy in front of it; `shareBazaar` / `resourceSharer` |
 
 Attesters measure through whatever facilitator each seller uses, because they pay as an ordinary x402 client.
 
@@ -45,6 +45,24 @@ Checkers:
 `rankResources(items, check)` adds a `trust` field to each Bazaar item and sorts trusted sellers first, then by score. Unknown sellers keep their order after the scored ones; nothing is removed.
 
 For a facilitator that cannot change its code, `discoveryProxy({ upstream, check })` serves a Bazaar-compatible `GET /discovery/resources` in front of it: the query is forwarded, the items come back ranked.
+
+## Share your Bazaar
+
+Discovery catalogues are partial. The CDP and Binance Bazaars do not overlap, and neither lists providers that never registered with either: on Stellar, one Soroban x402 flow with 719 payments was in no catalogue at all. A facilitator sees more than its catalogue, because it settles every resource its sellers charge for. Partner facilitators can share both, so the observatory measures more of the market.
+
+| How | What is shared | Code |
+| --- | --- | --- |
+| Push the Bazaar listing | The facilitator's own `GET /discovery/resources` | `shareBazaar({ facilitatorUrl, apiUrl, key })` |
+| Share what it settles | Resource URL, network and payTo of each verified payment; never the payer | `withTrustHooks(fac, { check, share: resourceSharer({ apiUrl, key }) })` |
+| Any other source | A Bazaar response or `{ resources: [{ url, network, payTo }] }` | `POST /v1/contributions` with `Authorization: Bearer <key>` |
+
+Rules:
+
+- Contributing is opt-in and needs a contributor key (ask hello@402scope.org).
+- A contribution only adds resources to measure. It never changes a score, and a facilitator cannot pay or contribute its way to a better one.
+- Each resource keeps the name of the facilitator that contributed it (`source: facilitator:<name>`), so coverage is attributable.
+- Sharing runs outside the payment path: batched every 5 minutes, failures dropped.
+- Up to 1 MB and 1,000 resources per request; URLs must be public HTTP(S).
 
 ## Smart-account payments and the fee ceiling
 

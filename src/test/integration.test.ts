@@ -289,3 +289,49 @@ test('trust hooks work on a standard @x402/core facilitator, and discovery from 
   const v = await apiSellerChecker(apiUrl)(GOOD, 'stellar:testnet');
   assert.deepEqual([v.trusted, v.reason], [false, 'seller not measured yet']);
 });
+
+test('partner facilitators share their Bazaar and the resources they settle', async () => {
+  const { createHash } = await import('node:crypto');
+  const { shareBazaar, resourceSharer } = await import('../contributions.js');
+  const { withTrustHooks } = await import('../facilitator.js');
+  const { x402Facilitator } = await import('@x402/core/facilitator');
+  const { createEd25519Signer } = await import('@x402/stellar');
+  const { ExactStellarScheme: F } = await import('@x402/stellar/exact/facilitator');
+  const KEY = 'partner-key-0123456789abcdef';
+  const store = new Store(path.join(dir, 'contrib.json'));
+  const api2 = createApi(store, { contributors: new Map([['acme', createHash('sha256').update(KEY).digest()]]) });
+  await new Promise<void>((r) => api2.listen(0, '127.0.0.1', r));
+  const api2Url = `http://127.0.0.1:${(api2.address() as { port: number }).port}`;
+  const bazaar = http.createServer((_q, s) => {
+    s.writeHead(200, { 'content-type': 'application/json' });
+    s.end(JSON.stringify({ items: [
+      { resource: 'https://unlisted.example/a', accepts: [{ network: 'stellar:pubnet', payTo: PAY_TO }] },
+      { resource: { url: 'https://unlisted.example/b' }, accepts: [] },
+      { resource: 'ftp://not-http.example/c' },
+    ] }));
+  });
+  await new Promise<void>((r) => bazaar.listen(0, '127.0.0.1', r));
+  try {
+    // Without a key: refused.
+    const anon = await fetch(`${api2Url}/v1/contributions`, { method: 'POST', body: '{}' });
+    assert.equal(anon.status, 401);
+    // Pull the facilitator's own Bazaar and push it.
+    const r = await shareBazaar({ facilitatorUrl: `http://127.0.0.1:${(bazaar.address() as { port: number }).port}`, apiUrl: api2Url, key: KEY });
+    assert.deepEqual(r, { contributor: 'acme', received: 3, added: 2, known: 0, rejected: 1 });
+    assert.equal(store.get('https://unlisted.example/a')?.source, 'facilitator:acme');
+
+    // Resources seen in payments, shared from the facilitator hooks.
+    const sharer = resourceSharer({ apiUrl: api2Url, key: KEY });
+    const fac = withTrustHooks(new x402Facilitator().register('stellar:testnet', new F([createEd25519Signer(Keypair.random().secret(), 'stellar:testnet')])), {
+      check: async () => ({ trusted: true, score: 90, source: 'local' }),
+      share: sharer,
+    });
+    const req = { scheme: 'exact', network: 'stellar:testnet', asset: USDC_TESTNET_ADDRESS, amount: '10000', payTo: PAY_TO, maxTimeoutSeconds: 60, extra: { areFeesSponsored: true } };
+    await fac.verify({ x402Version: 2, resource: { url: 'https://settled-only.example/q' }, accepted: req, payload: { transaction: 'AAAA' } } as never, req as never).catch(() => null);
+    await sharer.stop();
+    assert.equal(store.get('https://settled-only.example/q')?.source, 'facilitator:acme');
+  } finally {
+    api2.close();
+    bazaar.close();
+  }
+});

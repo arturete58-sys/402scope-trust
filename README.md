@@ -15,7 +15,7 @@ AI agent → x402 client → Agent wallet (OpenZeppelin smart account) → Trust
 
 **Live on Stellar testnet:** the [latest end-to-end run](docs/testnet/README.md) shows two bonded attesters scoring three sellers onchain, a seller caught breaking its own signed declaration, evidence checked by the contract, an agent wallet paying the good seller while its policy refuses the others, a standard facilitator refusing to settle with an untrusted seller, and the agent wallet paying in USDC through OpenZeppelin's hosted Built on Stellar facilitator. Every step is a transaction you can open.
 
-Part of the [402Scope observatory](https://402scope.org). Applying to the Stellar Community Fund (SCF #46).
+Part of the [402Scope observatory](https://402scope.org).
 
 ## Status
 
@@ -35,7 +35,8 @@ Part of the [402Scope observatory](https://402scope.org). Applying to the Stella
 | Bazaar and `/.well-known/x402` discovery | Working |
 | End-to-end testnet demo in CI | [Testnet demo workflow](.github/workflows/testnet-demo.yml), report in [docs/testnet](docs/testnet/README.md) |
 | Draft of the declarations extension for the x402 specification | [Draft, not submitted](docs/proposals/x402-extension-declarations.md) |
-| Dispute process for slashing, mainnet, audit | Next (SCF tranches) |
+| Contributions from partner facilitators (their Bazaar and the resources they settle) | Working, tested — [docs/facilitators.md](docs/facilitators.md#share-your-bazaar) |
+| Dispute process for slashing, mainnet, audit | Next |
 
 ## Quick start
 
@@ -172,7 +173,7 @@ Scores are never for sale. No seller can pay for a score or to change one. The m
 
 ## Development
 
-Built with [Claude Code](https://claude.com/claude-code). Every change is tested (`npm test`, `cargo test`) and reviewed before merging; the contracts will be audited through the SCF Audit Bank before mainnet.
+Every change is tested (`npm test`, `cargo test`) and reviewed before merging. The contracts will be audited before mainnet.
 
 ## License
 

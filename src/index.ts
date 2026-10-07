@@ -29,3 +29,7 @@ export {
   withTrustHooks, onchainSellerChecker, apiSellerChecker, localSellerChecker, cached, rankResources, discoveryProxy,
   type SellerChecker, type SellerVerdict, type TrustDecision,
 } from './facilitator.js';
+export {
+  shareBazaar, shareResources, resourceSharer, parseContribution, acceptContribution, contributorKeysFromEnv,
+  type ContributedResource,
+} from './contributions.js';
