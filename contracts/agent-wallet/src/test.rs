@@ -240,6 +240,7 @@ fn pays_trusted_sellers_up_to_the_limit_then_refuses() {
     assert_eq!(TokenClient::new(&w.e, &w.token).balance(&w.good), 250);
     let window = w.limit.window(&w.wallet, &0).unwrap();
     assert_eq!(window.spent, 250);
+    assert_eq!(window.remaining, 0);
     assert_eq!(w.limit.remaining(&w.wallet, &0), 0);
 }
 
@@ -248,7 +249,11 @@ fn the_window_rolls() {
     let w = world();
     assert!(pay(&w, &w.token, &w.good, 250));
     assert!(!pay(&w, &w.token, &w.good, 1));
-    w.e.ledger().set_sequence_number(10 + PERIOD + 1);
+    // Half a period later: still in the window.
+    w.e.ledger().set_sequence_number(10 + PERIOD / 2);
+    assert!(!pay(&w, &w.token, &w.good, 1));
+    // One period plus at most one bucket (period / 24) later: out of it.
+    w.e.ledger().set_sequence_number(10 + PERIOD + PERIOD.div_ceil(24) + 1);
     assert!(pay(&w, &w.token, &w.good, 250));
     assert_eq!(w.limit.remaining(&w.wallet, &0), 0);
 }
@@ -304,4 +309,18 @@ fn rules_have_the_expected_shape() {
     let c = AgentWalletClient::new(e, &plain);
     assert_eq!(c.get_context_rule(&0).context_type, ContextRuleType::Default);
     assert_eq!(c.get_context_rules_count(), 1);
+}
+
+/// A payment only rewrites the spending window: it must not grow stored
+/// state (rent on growth) or extend TTLs, so its fee stays flat.
+#[test]
+fn payments_pay_no_persistent_rent() {
+    let w = world();
+    assert!(pay(&w, &w.token, &w.good, 10)); // the first touches entries for the first time
+    for _ in 0..5 {
+        w.e.ledger().set_sequence_number(w.e.ledger().sequence() + 100);
+        assert!(pay(&w, &w.token, &w.good, 10));
+        let fee = w.e.cost_estimate().fee();
+        assert_eq!(fee.persistent_entry_rent, 0, "{:?}", fee);
+    }
 }

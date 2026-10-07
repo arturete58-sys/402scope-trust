@@ -27,7 +27,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
-import { Address, Asset, BASE_FEE, Keypair, nativeToScVal, Networks, Operation, rpc, TransactionBuilder, type xdr } from '@stellar/stellar-sdk';
+import { Address, Asset, BASE_FEE, Keypair, nativeToScVal, Networks, Operation, rpc, TransactionBuilder, xdr } from '@stellar/stellar-sdk';
 import { x402Facilitator } from '@x402/core/facilitator';
 import { x402Client } from '@x402/core/client';
 import { HTTPFacilitatorClient } from '@x402/core/server';
@@ -54,7 +54,7 @@ import { onchainSellerChecker, rankResources, withTrustHooks, type TrustDecision
 import { NO_DECLARATIONS } from '../probe.js';
 import { scoreEndpoint } from '../score.js';
 import { sellerScores } from '../seller.js';
-import { AgentWalletExactScheme, deployAgentWallet, uploadWasm } from '../smart-account.js';
+import { AgentWalletExactScheme, deployAgentWallet, invokeWithPasskey, passkeySigner, softwarePasskey, uploadWasm } from '../smart-account.js';
 import { Store } from '../store.js';
 
 const args = process.argv.slice(2);
@@ -136,11 +136,17 @@ async function main(): Promise<void> {
   // A second wallet with a budget: the trust policy decides who, the spending limit how much.
   log('deploying a budgeted agent wallet (trust policy + spending limit)');
   const limitPolicy = await deployWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_spending_limit'), args: null });
+  // The owner manages the budgeted wallet with a passkey (a software one here; a browser's in real use).
+  const webauthnVerifier = await deployWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_webauthn_verifier'), args: null });
+  const ownerPasskey = softwarePasskey();
   const budget = { spendingLimit: BUDGET, periodLedgers: 17_280 };
-  const budgetWallet = await deployAgentWallet({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, walletWasmHash: walletHash, verifier, signerKey: agentKey, policy, params: policyParams, token, spendingLimit: { policy: limitPolicy, ...budget } });
+  const budgetWallet = await deployAgentWallet({
+    rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, walletWasmHash: walletHash, verifier, signerKey: agentKey, policy, params: policyParams,
+    token, spendingLimit: { policy: limitPolicy, ...budget }, admins: [passkeySigner(webauthnVerifier, ownerPasskey.publicKey, ownerPasskey.credentialId)],
+  });
   await submit(server, PASS, k.issuer, Operation.invokeContractFunction({ contract: token, function: 'mint', args: [new Address(budgetWallet).toScVal(), nativeToScVal(10n * UNIT, { type: 'i128' })] }));
   const c = (id: string) => `https://stellar.expert/explorer/testnet/contract/${id}`;
-  out.contracts = { registry, policy, verifier, wallet, token, spendingLimit: limitPolicy, budgetWallet, links: { registry: c(registry), policy: c(policy), wallet: c(wallet), token: c(token), spendingLimit: c(limitPolicy), budgetWallet: c(budgetWallet) } };
+  out.contracts = { registry, policy, verifier, wallet, token, spendingLimit: limitPolicy, budgetWallet, webauthnVerifier, links: { registry: c(registry), policy: c(policy), wallet: c(wallet), token: c(token), spendingLimit: c(limitPolicy), budgetWallet: c(budgetWallet), webauthnVerifier: c(webauthnVerifier) } };
   out.policy = { attesters, minScore: 80, quorum: 2, maxUnverified: '0' };
   log('registry', registry, 'policy', policy, 'wallet', wallet);
 
@@ -313,7 +319,24 @@ async function main(): Promise<void> {
     }
     log(`budgeted wallet /${name}: ${budgetPayments.at(-1)!.outcome}`);
   }
-  out.budgetWallet = { wallet: budgetWallet, price: PRICE, limit: BUDGET.toString(), periodLedgers: budget.periodLedgers, payments: budgetPayments };
+  // The owner raises the budget with the passkey (rule 1); the agent key could not. Then the agent pays again.
+  const owner: Record<string, unknown> = { newLimit: (BUDGET * 2n).toString() };
+  try {
+    const passkey = { account: budgetWallet, verifier: webauthnVerifier, publicKey: ownerPasskey.publicKey, credentialId: ownerPasskey.credentialId, contextRuleId: 1, assert: ownerPasskey.assert };
+    const args = [new Address(budgetWallet).toScVal(), xdr.ScVal.scvU32(0), nativeToScVal(BUDGET * 2n, { type: 'i128' })];
+    const h = await invokeWithPasskey({ rpcUrl: RPC, networkPassphrase: PASS, source: k.admin, contractId: limitPolicy, method: 'set_spending_limit', args, passkey });
+    owner.tx = h ? txUrl(h) : null;
+    owner.raised = true;
+    const r = await budgeted(`${base}/good`);
+    const settle = r.headers.get('PAYMENT-RESPONSE');
+    const txh = settle ? JSON.parse(Buffer.from(settle, 'base64').toString()).transaction : null;
+    owner.paymentAfter = { endpoint: '/good', outcome: r.ok ? 'paid' : `HTTP ${r.status}`, tx: txh ? txUrl(txh) : null };
+  } catch (e) {
+    owner.raised = false;
+    owner.error = (e as Error).message.slice(0, 300);
+  }
+  log('owner passkey', owner);
+  out.budgetWallet = { wallet: budgetWallet, price: PRICE, limit: BUDGET.toString(), periodLedgers: budget.periodLedgers, payments: budgetPayments, owner };
 
   // check_before_pay with the onchain quorum, and the off-chain guard for classic accounts
   out.checks = [];
@@ -370,7 +393,7 @@ async function main(): Promise<void> {
   const badRefused = walletPayments.slice(1).every((p) => String(p.outcome).startsWith('refused'));
   const facOk = facilitatorPayments[0]?.outcome === 'paid' && facilitatorPayments[1]?.outcome !== 'paid';
   const o = budgetPayments.map((p) => String(p.outcome));
-  const budgetOk = o[0] === 'paid' && o[1] === 'paid' && o[2] === 'refused by the wallet: over the spending limit' && o[3].startsWith('refused');
+  const budgetOk = o[0] === 'paid' && o[1] === 'paid' && o[2] === 'refused by the wallet: over the spending limit' && o[3].startsWith('refused') && owner.raised === true && (owner.paymentAfter as { outcome?: string } | undefined)?.outcome === 'paid';
   if (!budgetOk) log('budgeted wallet expectations not met', JSON.stringify(budgetPayments.map((p) => ({ outcome: p.outcome, facilitator: p.facilitator, reason: String(p.reason ?? '').slice(0, 160) }))));
   if (!goodPaid || !badRefused || !facOk || !budgetOk || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
     throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused} facilitatorHooks=${facOk} budget=${o.join(',')}`);

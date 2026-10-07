@@ -53,13 +53,17 @@ The trust policy decides *who* the agent may pay. The spending limit decides *ho
 SpendingLimitParams { spending_limit: i128, period_ledgers: u32 }
 ```
 
-A refused payment (untrusted seller) does not use up the budget. Reads: `window(account, rule)` returns the limit, the payments still in the window and their total; `remaining(account, rule)` what is left. The wallet can change the limit with `set_spending_limit`. Errors: `LimitExceeded` (#3302), `NotAllowed` (#3304, anything but a token transfer).
+A refused payment (untrusted seller) does not use up the budget. Reads: `window(account, rule)` returns the limit, what was paid in the window and what remains; `remaining(account, rule)` just the last. The wallet can change the limit with `set_spending_limit`. Errors: `LimitExceeded` (#3302), `NotAllowed` (#3304, anything but a token transfer).
+
+The window is a fixed ring of 25 buckets of `ceil(period / 24)` ledgers, so the stored entry never grows and a payment only rewrites it: no rent on growth, no TTL extension, a flat fee (`payments_pay_no_persistent_rent` holds it to that). The window counted is the last period plus at most one bucket: never looser than an exact rolling window, at most 1/24 of a period stricter. Anyone can keep the entry stored with `extend(account, rule)`; if it ever expires, payments fail closed until it is restored.
 
 ### Why not OpenZeppelin's spending limit as it is
 
 OpenZeppelin's `spending_limit` policy has the same rolling window and parameters, and we first deployed it unchanged. On testnet every payment from that wallet was refused by the facilitator, not by the wallet: the x402 `exact` facilitator for Stellar (`@x402/stellar`) simulates the payment and accepts it only if the simulation emits exactly one event, the token transfer. OpenZeppelin's policy emits `SpendingLimitEnforced` on every payment, so the facilitator answers `invalid_exact_stellar_payload_event_not_transfer`.
 
-`scope-spending-limit` keeps OpenZeppelin's semantics and emits no event when it lets a payment through (installing or changing a limit still does). The trust policy emits none either. The test `a_payment_emits_only_the_transfer_event` holds both policies to it.
+`scope-spending-limit` keeps OpenZeppelin's parameters and emits no event when it lets a payment through (installing or changing a limit still does). The trust policy emits none either. The test `a_payment_emits_only_the_transfer_event` holds both policies to it.
+
+The second difference is cost. The facilitator also refuses a payment whose fee is above its ceiling, and OpenZeppelin's policy appends each payment to a stored list, paying rent on the growth every time. On testnet the first version of this wallet came to 2.2 million stroops a payment, over the demo facilitator's 2 million ceiling. The fixed ring above removes that.
 
 ### Two shapes
 

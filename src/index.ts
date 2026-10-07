@@ -17,7 +17,7 @@ export { evidenceLeaf, evidenceTree, buildTree, proofFor, verifyProof, type Merk
 export { sellerScores, type SellerScore } from './seller.js';
 export { type OnchainView } from './check.js';
 export {
-  AgentWalletExactScheme, walletAuthorizer, authDigest, externalSigner, passkeySigner, trustPolicyParams, spendingLimitParams, deployAgentWallet, uploadWasm,
+  AgentWalletExactScheme, walletAuthorizer, authDigest, externalSigner, passkeySigner, passkeyAuthorizer, invokeWithPasskey, softwarePasskey, derToRaw, lowS, type PasskeySigner, type PasskeyAssertion, trustPolicyParams, spendingLimitParams, deployAgentWallet, uploadWasm,
   type AgentWalletSigner, type TrustPolicyParams, type SpendingLimitParams,
 } from './smart-account.js';
 export {

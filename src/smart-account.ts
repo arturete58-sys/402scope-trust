@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, generateKeyPairSync, sign as cryptoSign, type KeyObject } from 'node:crypto';
 import { Address, authorizeEntry, contract, Keypair, nativeToScVal, Operation, rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
 import { getEstimatedLedgerCloseTimeSeconds, getNetworkPassphrase, getRpcClient } from '@x402/stellar';
 import type { PaymentPayload, PaymentRequirements, SchemeNetworkClient } from '@x402/core/types';
@@ -68,6 +68,127 @@ export function walletAuthorizer(w: AgentWalletSigner) {
       validUntil,
       passphrase as string,
     );
+}
+
+// ---- Passkeys (WebAuthn) ----------------------------------------------
+
+/** What a WebAuthn assertion returns (navigator.credentials.get), with the signature as raw r||s. */
+export interface PasskeyAssertion {
+  authenticatorData: Uint8Array;
+  clientDataJSON: Uint8Array;
+  /** 64 bytes r||s. DER signatures from browsers must be converted first (`derToRaw`). */
+  signature: Uint8Array;
+}
+
+export interface PasskeySigner {
+  /** The smart account (C...). */
+  account: string;
+  /** WebAuthn verifier contract (C...). */
+  verifier: string;
+  /** 65-byte uncompressed P-256 public key. */
+  publicKey: Uint8Array;
+  credentialId: Uint8Array;
+  /** Context rule the passkey signs for (the owner's "admin" rule is 1). */
+  contextRuleId: number;
+  /**
+   * Gets an assertion whose challenge is `challenge` (the auth digest). In a
+   * browser: navigator.credentials.get({ publicKey: { challenge, allowCredentials } }).
+   */
+  assert: (challenge: Uint8Array) => Promise<PasskeyAssertion>;
+}
+
+const P256_N = BigInt('0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551');
+
+/** Low-S form of a raw P-256 signature (Soroban's secp256r1 check requires it). */
+export function lowS(sig: Uint8Array): Buffer {
+  const r = Buffer.from(sig.subarray(0, 32));
+  let s = BigInt('0x' + Buffer.from(sig.subarray(32, 64)).toString('hex'));
+  if (s > P256_N / 2n) s = P256_N - s;
+  return Buffer.concat([r, Buffer.from(s.toString(16).padStart(64, '0'), 'hex')]);
+}
+
+/** Converts a DER ECDSA signature (what browsers return) to raw r||s. */
+export function derToRaw(der: Uint8Array): Buffer {
+  const b = Buffer.from(der);
+  let i = 2;
+  const int = () => {
+    if (b[i++] !== 0x02) throw new Error('not a DER signature');
+    const len = b[i++];
+    let v = b.subarray(i, i + len);
+    i += len;
+    while (v.length > 32 && v[0] === 0) v = v.subarray(1);
+    return Buffer.concat([Buffer.alloc(32 - v.length), v]);
+  };
+  return Buffer.concat([int(), int()]);
+}
+
+/**
+ * A software stand-in for a passkey, for tests and demos: a P-256 key that
+ * answers assertions exactly as an authenticator does (client data with the
+ * challenge in base64url, authenticator data with user-present and verified flags).
+ */
+export function softwarePasskey(origin = 'https://402scope.org'): { publicKey: Buffer; credentialId: Buffer; assert: (challenge: Uint8Array) => Promise<PasskeyAssertion>; privateKey: KeyObject } {
+  const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const jwk = publicKey.export({ format: 'jwk' }) as { x: string; y: string };
+  const pub = Buffer.concat([Buffer.from([4]), Buffer.from(jwk.x, 'base64url'), Buffer.from(jwk.y, 'base64url')]);
+  const rpIdHash = sha256(Buffer.from(new URL(origin).hostname));
+  return {
+    publicKey: pub,
+    credentialId: randomBytes(16),
+    privateKey,
+    assert: async (challenge) => {
+      const clientDataJSON = Buffer.from(JSON.stringify({ type: 'webauthn.get', challenge: Buffer.from(challenge).toString('base64url'), origin, crossOrigin: false }));
+      const authenticatorData = Buffer.concat([rpIdHash, Buffer.from([0x05]), Buffer.alloc(4)]); // UP | UV, counter 0
+      const signature = cryptoSign('sha256', Buffer.concat([authenticatorData, sha256(clientDataJSON)]), { key: privateKey, dsaEncoding: 'ieee-p1363' });
+      return { authenticatorData, clientDataJSON, signature };
+    },
+  };
+}
+
+/** Signs a Soroban auth entry for the smart account with a passkey; usable as `authorizeEntry`. */
+export function passkeyAuthorizer(p: PasskeySigner) {
+  const ruleIds = [p.contextRuleId];
+  return (entry: xdr.SorobanAuthorizationEntry, _signer: unknown, validUntil: number, passphrase?: string) =>
+    authorizeEntry(
+      entry,
+      async (_preimage: xdr.HashIdPreimage, payload: Buffer) => {
+        const a = await p.assert(authDigest(p.account, Buffer.from(payload), ruleIds));
+        // OpenZeppelin WebAuthnSigData, as the XDR of its contracttype struct.
+        const sigData = struct({
+          authenticator_data: xdr.ScVal.scvBytes(Buffer.from(a.authenticatorData)),
+          client_data: xdr.ScVal.scvBytes(Buffer.from(a.clientDataJSON)),
+          signature: xdr.ScVal.scvBytes(lowS(a.signature)),
+        }).toXDR();
+        const signers = xdr.ScVal.scvMap([new xdr.ScMapEntry({ key: passkeySigner(p.verifier, p.publicKey, p.credentialId), val: xdr.ScVal.scvBytes(sigData) })]);
+        return { signatureScVal: struct({ context_rule_ids: u32vec(ruleIds), signers }), address: p.account };
+      },
+      validUntil,
+      passphrase as string,
+    );
+}
+
+/**
+ * Has the smart account call `contractId.method(args)` with a passkey's
+ * authorization, sent by `source` (which pays the fee). For example the owner
+ * changing the agent's budget: `spendingLimit.set_spending_limit(wallet, 0, limit)`.
+ */
+export async function invokeWithPasskey(o: { rpcUrl: string; networkPassphrase: string; source: Keypair; contractId: string; method: string; args: xdr.ScVal[]; passkey: PasskeySigner }): Promise<string> {
+  const server = new rpc.Server(o.rpcUrl);
+  const tx = await contract.AssembledTransaction.build({
+    contractId: o.contractId,
+    method: o.method,
+    args: o.args,
+    networkPassphrase: o.networkPassphrase,
+    rpcUrl: o.rpcUrl,
+    publicKey: o.source.publicKey(),
+    parseResultXdr: (r: xdr.ScVal) => r,
+  });
+  const latest = (await server.getLatestLedger()).sequence;
+  await tx.signAuthEntries({ address: o.passkey.account, expiration: latest + 100, authorizeEntry: passkeyAuthorizer(o.passkey) as never });
+  await tx.simulate();
+  if (tx.simulation && rpc.Api.isSimulationError(tx.simulation)) throw new Error(`refused: ${tx.simulation.error}`);
+  const sent = await tx.signAndSend({ signTransaction: contract.basicNodeSigner(o.source, o.networkPassphrase).signTransaction });
+  return sent.sendTransactionResponse?.hash ?? '';
 }
 
 /**

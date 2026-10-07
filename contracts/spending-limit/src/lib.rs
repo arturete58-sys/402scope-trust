@@ -17,6 +17,16 @@
 //!
 //! Like OpenZeppelin's, it only accepts `CallContract(token)` rules: amounts
 //! of different tokens are never added together.
+//!
+//! It also keeps payment costs flat. OpenZeppelin's policy appends every
+//! payment to a list, so each payment grows the stored entry and pays rent
+//! on the growth (and extends its TTL). Here the window is a fixed ring of
+//! 25 buckets of `ceil(period / 24)` ledgers each: the entry never grows, and
+//! a payment only rewrites it. The window counted is the last `period`
+//! ledgers plus at most one bucket, so the limit is never looser than
+//! OpenZeppelin's, at most 1/24 of a period stricter. Payments never extend
+//! the entry's TTL; anyone can with `extend` (the owner, or a keeper). If it
+//! ever expires, payments fail closed until it is restored.
 #![no_std]
 use soroban_sdk::{
     auth::{Context, ContractContext},
@@ -31,8 +41,9 @@ use stellar_accounts::{
 const DAY_IN_LEDGERS: u32 = 17_280;
 const EXTEND_TO: u32 = 30 * DAY_IN_LEDGERS;
 const EXTEND_BELOW: u32 = EXTEND_TO - DAY_IN_LEDGERS;
-/// Most payments kept in one window (bounds the cost of each check).
-pub const MAX_HISTORY: u32 = 500;
+/// Buckets per period; the ring holds one more, so it always covers a full period.
+pub const BUCKETS: u32 = 24;
+const SLOTS: u32 = BUCKETS + 1;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -44,8 +55,8 @@ pub enum SpendingLimitError {
     InvalidParams = 3303,
     /// Only token transfers are allowed under a rule with a spending limit.
     NotAllowed = 3304,
-    /// Too many payments in the window; wait for older ones to leave it.
-    HistoryFull = 3305,
+    /// Unused (kept so error codes stay stable).
+    Reserved = 3305,
     AlreadyInstalled = 3306,
     /// Only `CallContract(token)` rules can have a spending limit.
     OnlyCallContract = 3307,
@@ -62,21 +73,26 @@ pub struct SpendingLimitParams {
     pub period_ledgers: u32,
 }
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SpendingEntry {
-    pub amount: i128,
-    pub ledger: u32,
-}
-
-/// The limit and what was paid in the current window.
+/// The limit and the ring of buckets. Constant size: payments rewrite it, never grow it.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SpendingWindow {
     pub spending_limit: i128,
     pub period_ledgers: u32,
-    pub history: Vec<SpendingEntry>,
+    /// Amount paid per bucket, indexed by (ledger / bucket length) mod 25.
+    pub buckets: Vec<i128>,
+    /// Bucket index (ledger / bucket length) of the latest update.
+    pub last_bucket: u32,
+}
+
+/// What `window` returns: the limit, the window and what was paid in it.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SpendingStatus {
+    pub spending_limit: i128,
+    pub period_ledgers: u32,
     pub spent: i128,
+    pub remaining: i128,
 }
 
 #[contracttype]
@@ -117,27 +133,38 @@ fn load(e: &Env, account: &Address, rule_id: u32) -> Option<SpendingWindow> {
 }
 
 fn save(e: &Env, account: &Address, rule_id: u32, w: &SpendingWindow) {
-    let k = Key::Window(account.clone(), rule_id);
-    e.storage().persistent().set(&k, w);
-    e.storage().persistent().extend_ttl(&k, EXTEND_BELOW, EXTEND_TO);
+    e.storage().persistent().set(&Key::Window(account.clone(), rule_id), w);
 }
 
-/// Drops payments that left the window: those at or before `now - period`.
+fn extend(e: &Env, account: &Address, rule_id: u32) {
+    e.storage().persistent().extend_ttl(&Key::Window(account.clone(), rule_id), EXTEND_BELOW, EXTEND_TO);
+}
+
+fn bucket_len(w: &SpendingWindow) -> u32 {
+    w.period_ledgers.div_ceil(BUCKETS).max(1)
+}
+
+/// Brings the ring up to `now`: empties the buckets that left the window.
 fn roll(w: &mut SpendingWindow, now: u32) {
-    if now <= w.period_ledgers {
+    let current = now / bucket_len(w);
+    if current <= w.last_bucket {
         return;
     }
-    let cutoff = now - w.period_ledgers;
-    let mut kept = Vec::new(w.history.env());
-    let mut spent = 0i128;
-    for entry in w.history.iter() {
-        if entry.ledger > cutoff {
-            spent += entry.amount;
-            kept.push_back(entry);
+    let steps = current - w.last_bucket;
+    if steps >= SLOTS {
+        for i in 0..SLOTS {
+            w.buckets.set(i, 0);
+        }
+    } else {
+        for b in (w.last_bucket + 1)..=current {
+            w.buckets.set(b % SLOTS, 0);
         }
     }
-    w.history = kept;
-    w.spent = spent;
+    w.last_bucket = current;
+}
+
+fn spent(w: &SpendingWindow) -> i128 {
+    w.buckets.iter().sum()
 }
 
 fn transfer_amount(e: &Env, ctx: &ContractContext) -> Option<i128> {
@@ -171,16 +198,14 @@ impl Policy for SpendingLimitPolicy {
             return;
         }
         roll(&mut w, e.ledger().sequence());
-        if w.spent + amount > w.spending_limit {
+        if spent(&w) + amount > w.spending_limit {
             panic_with_error!(e, SpendingLimitError::LimitExceeded)
         }
-        if w.history.len() >= MAX_HISTORY {
-            panic_with_error!(e, SpendingLimitError::HistoryFull)
-        }
-        w.history.push_back(SpendingEntry { amount, ledger: e.ledger().sequence() });
-        w.spent += amount;
+        let slot = w.last_bucket % SLOTS;
+        w.buckets.set(slot, w.buckets.get(slot).unwrap_or(0) + amount);
         save(e, &smart_account, context_rule.id, &w);
-        // No event here: see the module docs (x402 facilitators accept only the transfer event).
+        // No event and no TTL extension here: see the module docs (x402 facilitators
+        // accept only the transfer event, and a payment's fee should stay flat).
     }
 
     fn install(e: &Env, install_params: SpendingLimitParams, context_rule: ContextRule, smart_account: Address) {
@@ -194,8 +219,14 @@ impl Policy for SpendingLimitPolicy {
         if load(e, &smart_account, context_rule.id).is_some() {
             panic_with_error!(e, SpendingLimitError::AlreadyInstalled)
         }
-        let w = SpendingWindow { spending_limit: install_params.spending_limit, period_ledgers: install_params.period_ledgers, history: Vec::new(e), spent: 0 };
+        let mut buckets = Vec::new(e);
+        for _ in 0..SLOTS {
+            buckets.push_back(0i128);
+        }
+        let mut w = SpendingWindow { spending_limit: install_params.spending_limit, period_ledgers: install_params.period_ledgers, buckets, last_bucket: 0 };
+        w.last_bucket = e.ledger().sequence() / bucket_len(&w);
         save(e, &smart_account, context_rule.id, &w);
+        extend(e, &smart_account, context_rule.id);
         Installed { smart_account, context_rule_id: context_rule.id, spending_limit: w.spending_limit, period_ledgers: w.period_ledgers }.publish(e);
     }
 
@@ -213,19 +244,26 @@ impl Policy for SpendingLimitPolicy {
 #[contractimpl]
 impl SpendingLimitPolicy {
     /// The limit, the window and what was paid in it, as of now.
-    pub fn window(e: Env, smart_account: Address, context_rule_id: u32) -> Option<SpendingWindow> {
+    pub fn window(e: Env, smart_account: Address, context_rule_id: u32) -> Option<SpendingStatus> {
         load(&e, &smart_account, context_rule_id).map(|mut w| {
             roll(&mut w, e.ledger().sequence());
-            w
+            let s = spent(&w);
+            SpendingStatus { spending_limit: w.spending_limit, period_ledgers: w.period_ledgers, spent: s, remaining: (w.spending_limit - s).max(0) }
         })
     }
 
     /// How much more the wallet can pay in the current window.
     pub fn remaining(e: Env, smart_account: Address, context_rule_id: u32) -> i128 {
-        match Self::window(e, smart_account, context_rule_id) {
-            Some(w) => (w.spending_limit - w.spent).max(0),
-            None => 0,
+        Self::window(e, smart_account, context_rule_id).map(|w| w.remaining).unwrap_or(0)
+    }
+
+    /// Keeps the wallet's window stored for 30 more days. Anyone may call it
+    /// (the caller pays the fee); payments themselves never extend it.
+    pub fn extend(e: Env, smart_account: Address, context_rule_id: u32) {
+        if load(&e, &smart_account, context_rule_id).is_none() {
+            panic_with_error!(&e, SpendingLimitError::NotInstalled)
         }
+        extend(&e, &smart_account, context_rule_id);
     }
 
     /// Change the limit (the window length stays). The smart account must authorize it.
@@ -237,6 +275,7 @@ impl SpendingLimitPolicy {
         let mut w = load(&e, &smart_account, context_rule_id).unwrap_or_else(|| panic_with_error!(&e, SpendingLimitError::NotInstalled));
         w.spending_limit = spending_limit;
         save(&e, &smart_account, context_rule_id, &w);
+        extend(&e, &smart_account, context_rule_id);
         Changed { smart_account, context_rule_id, spending_limit }.publish(&e);
     }
 }

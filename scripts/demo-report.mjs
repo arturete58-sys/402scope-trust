@@ -33,7 +33,8 @@ out.push(`| Trust policy (OpenZeppelin \`Policy\`) | ${con(c.policy)} |`);
 out.push(`| Agent wallet (OpenZeppelin smart account, policy: ${r.policy?.quorum} of ${r.policy?.attesters?.length} attesters, score ≥ ${r.policy?.minScore}) | ${con(c.wallet)} |`);
 if (c.budgetWallet) {
   out.push(`| Spending limit policy (rolling window, x402-compatible) | ${con(c.spendingLimit)} |`);
-  out.push(`| Budgeted agent wallet (trust policy + spending limit, payments in SCOPE only) | ${con(c.budgetWallet)} |`);
+  out.push(`| Budgeted agent wallet (trust policy + spending limit, payments in SCOPE only; owner rule signed by a passkey) | ${con(c.budgetWallet)} |`);
+  if (c.webauthnVerifier) out.push(`| WebAuthn (passkey) verifier | ${con(c.webauthnVerifier)} |`);
 }
 out.push(`| ed25519 verifier | ${con(c.verifier)} |`);
 out.push(`| Test token SCOPE (SEP-41) | ${con(c.token)} |`, '');
@@ -81,6 +82,12 @@ if (r.budgetWallet) {
   out.push(`The budgeted wallet may pay sellers trusted by the quorum, and at most ${units(b.limit)} SCOPE in any ${b.periodLedgers.toLocaleString('en')} ledgers (about a day). Each call costs ${units(b.price)} SCOPE. Its agent key can only authorize payments in this token: the rule is scoped to the token contract.`, '');
   out.push('| Call | Endpoint | Outcome | Detail |', '| --- | --- | --- | --- |');
   b.payments.forEach((p, i) => out.push(`| ${i + 1} | \`${p.endpoint}\` | **${p.outcome}** | ${p.tx ? `[settlement](${p.tx})` : String(p.reason ?? '').split('\n')[0].replace(/\|/g, '/').slice(0, 120)} |`));
+  if (b.owner) {
+    const ow = b.owner;
+    out.push('', ow.raised
+      ? `Then the owner doubled the budget to ${units(ow.newLimit)} SCOPE, signing with a passkey (WebAuthn, P-256) under the wallet's admin rule ([tx](${ow.tx})). The agent key cannot do this: its rule covers the token only. The next call: **${ow.paymentAfter?.outcome}**${ow.paymentAfter?.tx ? ` ([settlement](${ow.paymentAfter.tx}))` : ''}.`
+      : `The owner's passkey could not raise the budget: ${String(ow.error ?? '').split('\n')[0].slice(0, 160)}`);
+  }
   out.push('', 'Both checks run inside the wallet\'s `__check_auth`, so neither depends on the agent\'s code behaving. The spending limit emits no event when it lets a payment through: the x402 facilitator for Stellar accepts a payment only if its simulation emits the token transfer and nothing else, which OpenZeppelin\'s own spending-limit policy does not meet (it emits `SpendingLimitEnforced` on every payment).', '');
 }
 

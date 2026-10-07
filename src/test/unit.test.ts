@@ -189,3 +189,22 @@ test('receipts are SEP-53 signed messages: any Stellar SDK can check them, and v
   // A v1 signature relabelled as v2 does not verify.
   assert.equal(verifyReceipt({ ...(v1 as object), v: 'x402-receipt/2' } as never, { paymentHeader: 'PAY', body: '{"ok":1}', payTo: seller.publicKey() }), 'invalid');
 });
+
+test('passkeys: assertions verify as WebAuthn expects, DER converts to raw, signatures are low-S', async () => {
+  const { createHash, createPublicKey, sign, verify } = await import('node:crypto');
+  const { softwarePasskey, derToRaw, lowS } = await import('../smart-account.js');
+  const pk = softwarePasskey();
+  assert.equal(pk.publicKey.length, 65);
+  const challenge = createHash('sha256').update('auth digest').digest();
+  const a = await pk.assert(challenge);
+  assert.equal(JSON.parse(Buffer.from(a.clientDataJSON).toString()).challenge, challenge.toString('base64url'));
+  const pub = createPublicKey({ key: { kty: 'EC', crv: 'P-256', x: pk.publicKey.subarray(1, 33).toString('base64url'), y: pk.publicKey.subarray(33).toString('base64url') }, format: 'jwk' });
+  const signed = Buffer.concat([Buffer.from(a.authenticatorData), createHash('sha256').update(a.clientDataJSON).digest()]);
+  const n = BigInt('0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551');
+  for (let i = 0; i < 8; i++) {
+    const der = sign('sha256', signed, { key: pk.privateKey, dsaEncoding: 'der' });
+    const raw = lowS(derToRaw(der));
+    assert.ok(BigInt('0x' + raw.subarray(32).toString('hex')) <= n / 2n);
+    assert.ok(verify('sha256', signed, { key: pub, dsaEncoding: 'ieee-p1363' }, raw));
+  }
+});
