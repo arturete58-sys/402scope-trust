@@ -6,7 +6,7 @@ import { assertPublicUrl, checkRequirement } from '../probe.js';
 import type { PaidCall } from '../measure.js';
 import { mimeMatches } from '../measure.js';
 
-const call = (o: Partial<PaidCall>): PaidCall => ({ at: '2026-10-06T00:00:00Z', ok: true, status: 200, latencyMs: 400, declaredAmount: '10000', transaction: 'abc', contentType: 'application/json', bytes: 10, delivered: true, ...o });
+const call = (o: Partial<PaidCall>): PaidCall => ({ at: '2026-10-06T00:00:00Z', ok: true, status: 200, latencyMs: 400, declaredAmount: '10000', transaction: 'abc', contentType: 'application/json', bytes: 10, delivered: true, receipt: 'valid', bodyHash: 'ab', ...o });
 
 test('normalizeUrl folds equivalent forms', () => {
   assert.equal(normalizeUrl('HTTPS://Api.Example.com:443/v1/data/#x'), 'https://api.example.com/v1/data');
@@ -35,11 +35,13 @@ test('score: perfect endpoint gets 100', () => {
 });
 
 test('score: failed deliveries and slow responses cost points', () => {
-  // Median latency 9000 ms -> 5 points; 3 of 5 delivered -> 36 points.
-  const calls = [call({ latencyMs: 9500 }), call({ delivered: false, latencyMs: 15000 }), call({ latencyMs: 8000 }), call({ delivered: false, latencyMs: 9000 }), call({})];
+  // Median latency 9000 ms -> 5 points.
+  const calls = [call({ latencyMs: 9500 }), call({ delivered: false, receipt: 'missing', latencyMs: 15000 }), call({ latencyMs: 8000 }), call({ delivered: false, receipt: 'invalid', latencyMs: 9000 }), call({})];
   const s = scoreEndpoint([{ code: 'fees', message: 'x' }], calls);
-  assert.deepEqual(s.parts, { delivery: 36, price: 20, latency: 5, declaration: 8 });
-  assert.equal(s.score, 69);
+  // Delivery 3/5 of 50, receipts 3/5 of 15, price 15, latency 5, declaration 10 - 2.
+  assert.deepEqual(s.parts, { delivery: 30, receipts: 9, price: 15, latency: 5, declaration: 8 });
+  assert.equal(s.score, 67);
+  assert.equal(s.receipts, 3);
   assert.equal(verdict(s, 80), 'caution');
 });
 
@@ -71,4 +73,46 @@ test('mimeMatches ignores parameters', () => {
   assert.equal(mimeMatches('application/json', 'application/json; charset=utf-8'), true);
   assert.equal(mimeMatches('application/json', 'text/html'), false);
   assert.equal(mimeMatches(undefined, null), true);
+});
+
+import { Keypair } from '@stellar/stellar-sdk';
+import { signReceipt, verifyReceipt, encodeReceipt, decodeReceipt } from '../receipts.js';
+import { buildTree, proofFor, verifyProof, evidenceLeaf } from '../evidence.js';
+import { authDigest } from '../smart-account.js';
+import { sellerScores } from '../seller.js';
+import type { EndpointRecord } from '../store.js';
+
+test('receipts: valid when signed by the payTo, unbound otherwise, invalid when tampered', () => {
+  const seller = Keypair.random();
+  const r = decodeReceipt(encodeReceipt(signReceipt(seller.secret(), { resource: 'https://a.example/x', paymentHeader: 'PAY', body: '{"ok":1}' })));
+  assert.equal(verifyReceipt(r, { paymentHeader: 'PAY', body: '{"ok":1}', payTo: seller.publicKey() }), 'valid');
+  assert.equal(verifyReceipt(r, { paymentHeader: 'PAY', body: '{"ok":1}', payTo: Keypair.random().publicKey() }), 'unbound');
+  assert.equal(verifyReceipt(r, { paymentHeader: 'PAY', body: '{"ok":2}', payTo: seller.publicKey() }), 'invalid');
+  assert.equal(verifyReceipt(r, { paymentHeader: 'OTHER', body: '{"ok":1}', payTo: seller.publicKey() }), 'invalid');
+  assert.equal(verifyReceipt({ ...r!, sig: Keypair.random().sign(Buffer.from('x')).toString('base64') }, { paymentHeader: 'PAY', body: '{"ok":1}', payTo: seller.publicKey() }), 'invalid');
+  assert.equal(verifyReceipt(null, { paymentHeader: 'PAY', body: '' }), 'missing');
+  assert.equal(decodeReceipt('not base64 json'), null);
+});
+
+test('evidence: every leaf proves into the root, including odd trees', () => {
+  for (const n of [1, 2, 3, 5, 8, 13]) {
+    const leaves = Array.from({ length: n }, (_, i) => evidenceLeaf(call({ transaction: `tx${i}`, bodyHash: `b${i}` })));
+    const t = buildTree(leaves);
+    leaves.forEach((l, i) => assert.ok(verifyProof(l, proofFor(t, i), t.root), `n=${n} i=${i}`));
+    assert.ok(!verifyProof(evidenceLeaf(call({ transaction: 'other' })), proofFor(t, 0), t.root) || n === 0);
+  }
+});
+
+test('smart account digest matches the Rust test vector', () => {
+  // Same inputs as contracts/agent-wallet/src/test.rs.
+  const d = authDigest('CBQHNAXSI55GX2GN6D67GK7BHVPSLJUGZQEU7WJ5LKR5PNUCGLIMAO4K', Buffer.alloc(32, 7), [0]);
+  assert.equal(d.toString('hex'), '6a9ce79520683bcdd0967da374e1b206090ca458c1fb4a0e2bf737ca2cf74118');
+});
+
+test('seller score is the call-weighted average of its endpoints', () => {
+  const rec = (payTo: string, score: number, calls: number) => ({ url: `https://x/${score}`, payTo, score: { score, calls, delivered: calls, receipts: calls }, calls: [call({ at: `2026-10-0${calls}T00:00:00Z` })] }) as unknown as EndpointRecord;
+  const [s] = sellerScores([rec('GA', 100, 8), rec('GA', 20, 2)]);
+  assert.equal(s.score, 84);
+  assert.equal(s.endpoints, 2);
+  assert.equal(s.calls, 10);
 });

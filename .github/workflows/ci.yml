@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: contracts/attestations
+        working-directory: contracts
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -38,11 +38,11 @@ jobs:
           "$HOME/.local/bin/stellar" --version
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: contracts/attestations
+          workspaces: contracts
       - run: cargo test
-      - run: bash ../../scripts/run-and-annotate.sh "contract build" stellar contract build
-      - run: ls -l target/wasm32v1-none/release/scope_attestations.wasm
+      - run: bash ../scripts/run-and-annotate.sh "contract build" stellar contract build
+      - run: ls -l target/wasm32v1-none/release/*.wasm
       - uses: actions/upload-artifact@v4
         with:
-          name: scope_attestations.wasm
-          path: contracts/attestations/target/wasm32v1-none/release/scope_attestations.wasm
+          name: contracts-wasm
+          path: contracts/target/wasm32v1-none/release/*.wasm

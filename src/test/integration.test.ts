@@ -169,3 +169,30 @@ test('well-known discovery under a path prefix (as on stellar.org/x402-demo/api)
   assert.deepEqual(found.map((d) => d.url), [`${sellerUrl}/api/good?city=Valencia`]);
   assert.equal(found[0].source, `${sellerUrl}/api/.well-known/x402`);
 });
+
+test('deliveryReceipts middleware signs exactly the body that was sent', async () => {
+  const { default: express } = await import('express');
+  const { deliveryReceipts, decodeReceipt, verifyReceipt, RECEIPT_HEADER } = await import('../receipts.js');
+  const seller = Keypair.random();
+  const app = express();
+  app.use(deliveryReceipts({ secret: seller.secret() }));
+  app.get('/json', (_q: any, s: any) => s.json({ price: 0.42, pair: 'XLM/USD' }));
+  app.get('/chunks', (_q: any, s: any) => { s.type('text/plain'); s.write('hello '); s.end('world'); });
+  app.get('/fail', (_q: any, s: any) => s.status(500).json({ error: 'down' }));
+  const h = await new Promise<http.Server>((ok) => { const x = app.listen(0, '127.0.0.1', () => ok(x)); });
+  const base = `http://127.0.0.1:${(h.address() as { port: number }).port}`;
+  try {
+    for (const path of ['/json', '/chunks']) {
+      const r = await fetch(`${base}${path}`, { headers: { 'PAYMENT-SIGNATURE': 'PAY-123' } });
+      const body = Buffer.from(await r.arrayBuffer());
+      const rec = decodeReceipt(r.headers.get(RECEIPT_HEADER));
+      assert.equal(verifyReceipt(rec, { paymentHeader: 'PAY-123', body, payTo: seller.publicKey() }), 'valid', path);
+    }
+    assert.equal(Buffer.from(await (await fetch(`${base}/chunks`, { headers: { 'PAYMENT-SIGNATURE': 'x' } })).arrayBuffer()).toString(), 'hello world');
+    // No receipt for unpaid requests or failed responses.
+    assert.equal((await fetch(`${base}/json`)).headers.get(RECEIPT_HEADER), null);
+    assert.equal((await fetch(`${base}/fail`, { headers: { 'PAYMENT-SIGNATURE': 'PAY' } })).headers.get(RECEIPT_HEADER), null);
+  } finally {
+    h.close();
+  }
+});

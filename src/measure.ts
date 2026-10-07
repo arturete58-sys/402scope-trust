@@ -4,6 +4,7 @@ import { createEd25519Signer } from '@x402/stellar';
 import { ExactStellarScheme } from '@x402/stellar/exact/client';
 import type { PaymentRequirements } from '@x402/core/types';
 import { USER_AGENT } from './probe.js';
+import { decodeReceipt, RECEIPT_HEADER, sha256hex, verifyReceipt, type ReceiptCheck } from './receipts.js';
 
 /** One paid call made by the measurer. */
 export interface PaidCall {
@@ -19,6 +20,12 @@ export interface PaidCall {
   bytes: number;
   /** Delivered = paid, 2xx, settled, non-empty, and matching the declared MIME type. */
   delivered: boolean;
+  /** sha256 (hex) of the body received. */
+  bodyHash?: string;
+  /** Delivery receipt check (see receipts.ts). */
+  receipt?: ReceiptCheck;
+  /** The payTo that was paid. */
+  payTo?: string;
   error?: string;
 }
 
@@ -54,7 +61,14 @@ export async function measurePaid(url: string, opts: MeasureOptions): Promise<Pa
       return chosen;
     },
   });
-  const paidFetch = wrapFetchWithPayment(fetch, client);
+  // Remember the payment header we send, to check the seller's receipt against it.
+  let paymentHeader: string | null = null;
+  const spyFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = new Request(input, init);
+    paymentHeader = req.headers.get('PAYMENT-SIGNATURE') ?? req.headers.get('X-PAYMENT') ?? paymentHeader;
+    return fetch(req);
+  }) as typeof fetch;
+  const paidFetch = wrapFetchWithPayment(spyFetch, client);
   const http = new x402HTTPClient(client);
   const call: PaidCall = { at: new Date().toISOString(), ok: false, status: null, latencyMs: null, declaredAmount: null, transaction: null, contentType: null, bytes: 0, delivered: false };
   const t0 = performance.now();
@@ -65,7 +79,11 @@ export async function measurePaid(url: string, opts: MeasureOptions): Promise<Pa
     call.contentType = r.headers.get('content-type');
     const buf = new Uint8Array(await r.arrayBuffer());
     call.bytes = buf.byteLength;
-    call.declaredAmount = (chosen as PaymentRequirements | null)?.amount ?? null;
+    call.bodyHash = sha256hex(buf);
+    const paid = chosen as PaymentRequirements | null;
+    call.declaredAmount = paid?.amount ?? null;
+    call.payTo = paid?.payTo;
+    call.receipt = paymentHeader ? verifyReceipt(decodeReceipt(r.headers.get(RECEIPT_HEADER)), { paymentHeader, body: buf, payTo: paid?.payTo }) : 'missing';
     try {
       const settle = http.getPaymentSettleResponse((n: string) => r.headers.get(n));
       call.transaction = settle.transaction ?? null;

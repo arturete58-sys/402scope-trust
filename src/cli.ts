@@ -3,7 +3,8 @@ import { createApi } from './api.js';
 import { checkBeforePay } from './check.js';
 import { fromFacilitator, fromSeedFile, fromWellKnown } from './indexer.js';
 import { attestationKey } from './key.js';
-import { chainConfigFromEnv, DEFAULT_TTL_LEDGERS, latestLedger, toAttestation, writeAttestation } from './chain.js';
+import { chainConfigFromEnv, DEFAULT_TTL_LEDGERS, latestLedger, registerAttester, toAttestation, toSellerAttestation, writeAttestation, writeSellerAttestation } from './chain.js';
+import { sellerScores } from './seller.js';
 import { measurePaid } from './measure.js';
 import { runMcp } from './mcp.js';
 import { probe } from './probe.js';
@@ -26,7 +27,8 @@ const HELP = `402Scope Trust — measure x402 endpoints on Stellar and check the
   scope-trust index [--facilitator URL]… [--wellknown ORIGIN]… [--seeds seeds.txt]
                                           Find Stellar x402 endpoints
   scope-trust run [--paid] [--calls 1]    Probe every endpoint; with --paid also make real paid calls
-  scope-trust attest                      Write scores onchain (needs TRUST_CONTRACT_ID, TRUST_SIGNER_SECRET)
+  scope-trust register-attester --amount N Lock a bond and become an attester (TRUST_ATTESTER_SECRET)
+  scope-trust attest                      Write endpoint and seller scores onchain (TRUST_CONTRACT_ID, TRUST_ATTESTER_SECRET)
   scope-trust serve [--port 8403]         Public read API
   scope-trust mcp                         MCP server over stdio
 
@@ -85,22 +87,32 @@ async function main(): Promise<void> {
       }
       return print({ endpoints: n, paid });
     }
+    case 'register-attester': {
+      const chain = chainConfigFromEnv();
+      const secret = process.env.TRUST_ATTESTER_SECRET;
+      if (!chain || !secret) throw new Error('register-attester needs TRUST_CONTRACT_ID and TRUST_ATTESTER_SECRET');
+      return print({ tx: await registerAttester(chain, secret, BigInt(flag('amount', '0') as string)) });
+    }
     case 'attest': {
       const chain = chainConfigFromEnv();
-      const secret = process.env.TRUST_SIGNER_SECRET;
-      if (!chain || !secret) throw new Error('attest needs TRUST_CONTRACT_ID and TRUST_SIGNER_SECRET');
+      const secret = process.env.TRUST_ATTESTER_SECRET ?? process.env.TRUST_SIGNER_SECRET;
+      if (!chain || !secret) throw new Error('attest needs TRUST_CONTRACT_ID and TRUST_ATTESTER_SECRET');
       const store = Store.open();
       const ledger = await latestLedger(chain);
-      const ttl = Number(process.env.TRUST_TTL_LEDGERS ?? DEFAULT_TTL_LEDGERS);
-      const done: { url: string; score: number; tx: string }[] = [];
+      const expires = ledger + Number(process.env.TRUST_TTL_LEDGERS ?? DEFAULT_TTL_LEDGERS);
+      const endpoints: { url: string; score: number; tx: string }[] = [];
       for (const r of store.all()) {
-        if (!r.key || r.score?.score == null) continue;
-        const txHash = await writeAttestation(chain, secret, r.key, toAttestation(r, ledger + ttl));
-        store.setAttestation(r.url, { tx: txHash, expiresLedger: ledger + ttl, score: r.score.score, at: new Date().toISOString() });
+        if (!r.key || r.score?.score == null || !r.calls.length) continue;
+        const txHash = await writeAttestation(chain, secret, r.key, toAttestation(r, expires));
+        store.setAttestation(r.url, { tx: txHash, expiresLedger: expires, score: r.score.score, at: new Date().toISOString() });
         store.save();
-        done.push({ url: r.url, score: r.score.score, tx: txHash });
+        endpoints.push({ url: r.url, score: r.score.score, tx: txHash });
       }
-      return print({ contract: chain.contractId, attested: done });
+      const sellers = [];
+      for (const s of sellerScores(store.all())) {
+        sellers.push({ seller: s.seller, score: s.score, tx: await writeSellerAttestation(chain, secret, s.seller, toSellerAttestation(s, expires)) });
+      }
+      return print({ contract: chain.contractId, endpoints, sellers });
     }
     case 'serve': {
       const port = Number(flag('port', process.env.PORT ?? '8403'));

@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = ["attestations", "trust-policy", "agent-wallet", "ed25519-verifier"]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+version = "0.2.0"
+
+[workspace.dependencies]
+soroban-sdk = "28.0.0"
+# OpenZeppelin Stellar Contracts (smart accounts and policies), pinned commit on soroban-sdk 28.
+stellar-accounts = { git = "https://github.com/OpenZeppelin/stellar-contracts", rev = "d3f7df80dc722e691917500ccfae419011691932" }
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true

@@ -1,13 +1,14 @@
 import { probe } from './probe.js';
 import { verdict, type Score, type Verdict } from './score.js';
-import { latestLedger, readAttestation, type ChainConfig } from './chain.js';
+import { latestLedger, readSellerAttestation, trustedBy, type ChainConfig } from './chain.js';
 import type { Store } from './store.js';
 
 export interface OnchainView {
   contractId: string;
-  score: number;
-  expiresLedger: number;
-  current: boolean;
+  /** True when at least `quorum` of the chosen attesters trust the seller (contract `trusted_by`). */
+  trusted: boolean;
+  quorum: number;
+  attestations: { attester: string; score: number; calls: number; receipts: number; expiresLedger: number; current: boolean }[];
 }
 
 export interface CheckResult {
@@ -51,21 +52,31 @@ export async function checkBeforePay(store: Store, url: string, minScore = 80, o
   let score = s?.score ?? null;
 
   let onchain: OnchainView | null = null;
-  if (opts.chain && rec?.key) {
+  const attesters = opts.chain?.attesters ?? [];
+  if (opts.chain && rec?.payTo && attesters.length) {
+    const chain = opts.chain;
+    const quorum = Math.max(1, Math.min(chain.quorum ?? 1, attesters.length));
     try {
-      const [a, ledger] = await Promise.all([readAttestation(opts.chain, rec.key), latestLedger(opts.chain)]);
-      if (a) {
-        onchain = { contractId: opts.chain.contractId, score: a.score, expiresLedger: a.expires_ledger, current: a.expires_ledger > ledger };
-        if (onchain.current) {
-          score = a.score;
-          v = a.score >= minScore ? (a.calls >= 5 ? 'trusted' : 'caution') : a.score < 40 ? 'avoid' : 'caution';
-          reasons.push(`onchain attestation: score ${a.score}, ${a.delivered} of ${a.calls} paid calls delivered (contract ${opts.chain.contractId})`);
-        } else {
-          v = 'unknown';
-          reasons.push('onchain attestation has expired: treat as unmeasured');
-        }
+      const [ledger, trusted, atts] = await Promise.all([
+        latestLedger(chain),
+        trustedBy(chain, rec.payTo, attesters, minScore, quorum),
+        Promise.all(attesters.map((a) => readSellerAttestation(chain, a, rec!.payTo as string))),
+      ]);
+      onchain = {
+        contractId: chain.contractId,
+        trusted,
+        quorum,
+        attestations: atts.flatMap((a, i) => (a ? [{ attester: attesters[i], score: a.score, calls: a.calls, receipts: a.receipts, expiresLedger: a.expires_ledger, current: a.expires_ledger > ledger }] : [])),
+      };
+      const current = onchain.attestations.filter((a) => a.current);
+      if (current.length) {
+        const sorted = current.map((a) => a.score).sort((x, y) => x - y);
+        score = sorted[Math.floor((sorted.length - 1) / 2)];
+        v = trusted ? 'trusted' : score < 40 ? 'avoid' : 'caution';
+        reasons.push(`onchain: ${current.length} current attestation(s) for seller ${rec.payTo}, ${trusted ? '' : 'not '}trusted by ${quorum} of ${attesters.length} chosen attesters at score ${minScore} (contract ${chain.contractId})`);
       } else {
-        reasons.push('no onchain attestation yet');
+        v = 'unknown';
+        reasons.push('no current onchain attestation for this seller');
       }
     } catch (e) {
       reasons.push(`could not read the contract: ${(e as Error).message}`);
@@ -77,9 +88,9 @@ export async function checkBeforePay(store: Store, url: string, minScore = 80, o
     v = 'avoid';
     reasons.unshift(fatal.message);
   }
-  if (!onchain?.current) {
+  if (!onchain?.attestations.some((a) => a.current)) {
     if (s && s.score != null) {
-      reasons.push(`${s.delivered} of ${s.calls} paid calls delivered`);
+      reasons.push(`${s.delivered} of ${s.calls} paid calls delivered, ${s.receipts ?? 0} with a valid signed receipt`);
       reasons.push(s.priceOk ? 'charged the declared price' : 'charged amount did not match the declared price, or no settlement seen');
       if (s.p50Ms != null) reasons.push(`median paid latency ${s.p50Ms} ms`);
       if (s.lowSample) reasons.push('fewer than 5 paid calls: low confidence');

@@ -4,4 +4,5 @@ data/
 target/
 *.wasm
 .env
-contracts/attestations/test_snapshots/
+contracts/**/test_snapshots/
+demo-result.json

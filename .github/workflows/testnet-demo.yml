@@ -13,7 +13,7 @@ on:
         default: '5'
   push:
     branches: [main]
-    paths: ['src/**', 'contracts/**', '.github/workflows/testnet-demo.yml']
+    paths: ['src/**', 'contracts/*/src/**', 'contracts/Cargo.toml', '.github/workflows/testnet-demo.yml']
 
 concurrency:
   group: testnet-demo
@@ -38,10 +38,10 @@ jobs:
           "$HOME/.local/bin/stellar" --version
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: contracts/attestations
+          workspaces: contracts
       - name: Build contract
-        working-directory: contracts/attestations
-        run: bash ../../scripts/run-and-annotate.sh "contract build" stellar contract build
+        working-directory: contracts
+        run: bash ../scripts/run-and-annotate.sh "contract build" stellar contract build
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -49,13 +49,13 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Run the testnet demo
-        run: bash scripts/run-and-annotate.sh "testnet demo" node dist/demo/testnet.js --wasm contracts/attestations/target/wasm32v1-none/release/scope_attestations.wasm --calls "${{ github.event.inputs.calls || '5' }}" --out demo-result.json
+        run: bash scripts/run-and-annotate.sh "testnet demo" node dist/demo/testnet.js --wasm-dir contracts/target/wasm32v1-none/release --calls "${{ github.event.inputs.calls || '5' }}" --out demo-result.json
       - name: Summary
         if: always()
         run: |
           if [ -f demo-result.json ]; then
             node scripts/demo-report.mjs demo-result.json | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "::notice title=testnet demo::$(node -e 'const r=require("./demo-result.json");console.log([r.contractId,...(r.endpoints||[]).map(e=>e.endpoint+"="+e.score?.score+"/"+e.verdict)].join(" "))')"
+            echo "::notice title=testnet demo::$(node -e 'const r=require("./demo-result.json");console.log(JSON.stringify({wallet:r.walletPayments,sellers:(r.sellers||[]).map(s=>[s.label,s.trustedBy2of2,s.attestations.map(a=>a.score)]),evidence:r.evidence}))')"
           fi
       - name: Publish results in the repository
         if: success() && github.ref == 'refs/heads/main'
