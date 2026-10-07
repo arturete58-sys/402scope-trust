@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createApi } from './api.js';
 import { checkBeforePay } from './check.js';
+import { attesterIdentity } from './identity.js';
 import { fromFacilitator, fromSeedFile, fromWellKnown } from './indexer.js';
 import { attestationKey } from './key.js';
 import { chainConfigFromEnv, DEFAULT_TTL_LEDGERS, latestLedger, registerAttester, toAttestation, toSellerAttestation, writeAttestation, writeSellerAttestation } from './chain.js';
@@ -30,6 +31,7 @@ const HELP = `402Scope Trust — measure x402 endpoints on Stellar and check the
   scope-trust register-attester --amount N Lock a bond and become an attester (TRUST_ATTESTER_SECRET)
   scope-trust attest                      Write endpoint and seller scores onchain (TRUST_CONTRACT_ID, TRUST_ATTESTER_SECRET)
   scope-trust serve [--port 8403]         Public read API
+  scope-trust attester-identity <G…>      Who is behind an attester (SEP-1 home_domain + stellar.toml)
   scope-trust mcp                         MCP server over stdio
 
 Paid calls need MEASURE_SECRET (a dedicated low-balance wallet), MEASURE_NETWORK
@@ -119,6 +121,11 @@ async function main(): Promise<void> {
       const host = process.env.HOST ?? '127.0.0.1';
       createApi(Store.open(), { chain: chainConfigFromEnv() }).listen(port, host, () => console.log(`402Scope Trust API on http://${host}:${port}`));
       return;
+    }
+    case 'attester-identity': {
+      const addr = args[0];
+      if (!addr) throw new Error('usage: scope-trust attester-identity G... [--horizon https://horizon-testnet.stellar.org]');
+      return print(await attesterIdentity(addr, { horizonUrl: flag('horizon', process.env.HORIZON_URL ?? 'https://horizon.stellar.org') as string }));
     }
     case 'mcp':
       return runMcp();

@@ -335,3 +335,30 @@ test('partner facilitators share their Bazaar and the resources they settle', as
     bazaar.close();
   }
 });
+
+test('attester identity follows SEP-1 both ways: home_domain and stellar.toml ACCOUNTS', async () => {
+  const { attesterIdentity } = await import('../identity.js');
+  const listed = Keypair.random().publicKey();
+  const other = Keypair.random().publicKey();
+  const site = http.createServer((q, s) => {
+    if (q.url === '/.well-known/stellar.toml') {
+      s.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*' });
+      return s.end(`VERSION="2.7.0"\nACCOUNTS=["${listed}"]\n\n[DOCUMENTATION]\nORG_NAME="Example Attester"\nORG_URL="https://attester.example"\n`);
+    }
+    s.writeHead(404); s.end();
+  });
+  await new Promise<void>((r) => site.listen(0, '127.0.0.1', r));
+  const domain = `127.0.0.1:${(site.address() as { port: number }).port}`;
+  try {
+    const ok = await attesterIdentity(listed, { homeDomainOf: async () => domain, allowHttp: true });
+    assert.deepEqual([ok.verified, ok.domain, ok.orgName], [true, domain, 'Example Attester']);
+    // The domain does not list this account: claiming a domain alone is not enough.
+    const no = await attesterIdentity(other, { homeDomainOf: async () => domain, allowHttp: true });
+    assert.equal(no.verified, false);
+    assert.match(String(no.reason), /does not list/);
+    const none = await attesterIdentity(other, { homeDomainOf: async () => null });
+    assert.equal(none.reason, 'the account sets no home_domain');
+  } finally {
+    site.close();
+  }
+});

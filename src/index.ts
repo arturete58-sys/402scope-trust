@@ -33,3 +33,4 @@ export {
   shareBazaar, shareResources, resourceSharer, parseContribution, acceptContribution, contributorKeysFromEnv,
   type ContributedResource,
 } from './contributions.js';
+export { attesterIdentity, type AttesterIdentity, type IdentityOptions } from './identity.js';

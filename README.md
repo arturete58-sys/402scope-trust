@@ -35,6 +35,7 @@ Part of the [402Scope observatory](https://402scope.org).
 | Bazaar and `/.well-known/x402` discovery | Working |
 | End-to-end testnet demo in CI | [Testnet demo workflow](.github/workflows/testnet-demo.yml), report in [docs/testnet](docs/testnet/README.md) |
 | Draft of the declarations extension for the x402 specification | [Draft, not submitted](docs/proposals/x402-extension-declarations.md) |
+| Stellar standards: SEP-41 payments and bonds, SEP-53 signed receipts and claims, SEP-1 attester identity, SEP-46/55 verified contract builds | Working — [docs/stellar-standards.md](docs/stellar-standards.md) |
 | Contributions from partner facilitators (their Bazaar and the resources they settle) | Working, tested — [docs/facilitators.md](docs/facilitators.md#share-your-bazaar) |
 | Dispute process for slashing, mainnet, audit | Next |
 

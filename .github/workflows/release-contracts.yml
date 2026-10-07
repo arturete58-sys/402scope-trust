@@ -1,0 +1,32 @@
+name: Release contracts (verified builds)
+
+# SEP-55: on a version tag, each contract is built by the shared
+# stellar-expert/soroban-build-workflow with source_repo and home_domain in
+# its meta, published as a release with its sha256, and attested by GitHub.
+# Explorers such as Stellar Expert then show a deployed contract as built
+# from this repository at that commit.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: write
+  attestations: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [scope-attestations, scope-trust-policy, scope-agent-wallet, scope-ed25519-verifier]
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}-${{ matrix.package }}
+      release_description: '402Scope Trust contract ${{ matrix.package }}, verified build (SEP-55)'
+      relative_path: contracts
+      package: ${{ matrix.package }}
+      home_domain: '402scope.org'
+    secrets: inherit
