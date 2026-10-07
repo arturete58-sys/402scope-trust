@@ -18,7 +18,7 @@ const CONTRACTS = [
   // [module name, wasm file, what it is]
   ['attestations', 'scope_attestations.wasm', 'Attestation registry: bonded attesters, seller scores, evidence roots'],
   ['trustPolicy', 'scope_trust_policy.wasm', 'Trust policy for OpenZeppelin smart accounts: refuse payments to sellers below a score'],
-  ['agentWallet', 'scope_agent_wallet.wasm', 'Agent wallet: an OpenZeppelin smart account with the trust policy installed'],
+  ['agentWallet', 'scope_agent_wallet.wasm', 'Agent wallet: an OpenZeppelin smart account with the trust policy, an optional spending limit and an owner rule (passkey)'],
   ['ed25519Verifier', 'scope_ed25519_verifier.wasm', 'Ed25519 verifier for the smart account signers'],
   ['spendingLimit', 'scope_spending_limit.wasm', 'Spending limit policy: at most an amount per rolling window, x402-compatible'],
   ['webauthnVerifier', 'scope_webauthn_verifier.wasm', 'WebAuthn (passkey) verifier for smart account signers'],

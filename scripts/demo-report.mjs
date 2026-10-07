@@ -21,7 +21,7 @@ out.push(`1. Two independent attesters locked a bond and measured ${nEndpoints} 
 if (r.version >= 3) out.push(`2. Sellers published delivery terms in their 402 challenge (\`extensions.declarations\`) and declared each response (\`X-402-Declaration\`), signed with the delivery receipt. The stale seller promised data under 60 s old and served 20-minute-old data, under its own signature.`);
 out.push(`${r.version >= 3 ? 3 : 2}. The attesters wrote signed scores onchain, per endpoint and per seller, each with the Merkle root of its evidence.`);
 out.push(`${r.version >= 3 ? 4 : 3}. An agent wallet (OpenZeppelin smart account) with the 402Scope Trust policy installed paid over x402: **${paid} payment(s) went through, ${refused} were refused by the wallet itself.**`);
-if (r.budgetWallet) out.push(`${r.version >= 3 ? 5 : 4}. A second agent wallet carried the same trust policy plus a spending limit: it paid the trusted seller until its daily budget ran out, and the wallet refused the next call.`);
+if (r.budgetWallet) out.push(`${r.version >= 3 ? 5 : 4}. A second agent wallet carried the same trust policy plus a spending limit: it refused the untrusted seller, paid the trusted one until its daily budget ran out and refused the next call; the owner then raised the budget with a passkey.`);
 if (r.facilitatorHooks) out.push(`${r.budgetWallet ? 6 : 5}. A standard x402 facilitator with 402Scope trust hooks refused to settle a plain payment to the stale seller.`);
 out.push('');
 

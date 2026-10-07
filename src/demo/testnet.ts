@@ -300,13 +300,14 @@ async function main(): Promise<void> {
   }
   out.walletPayments = walletPayments;
 
-  // 6b. The budgeted wallet: same trust policy, plus a spending limit. Trusted seller, three calls in a row.
+  // 6b. The budgeted wallet: same trust policy, plus a spending limit. The bad seller first (trust policy),
+  // then the trusted seller three times in a row (spending limit).
   const budgeted = wrapFetchWithPayment(fetch, x402Client.fromConfig({
     schemes: [{ network: 'stellar:*', client: new AgentWalletExactScheme({ account: budgetWallet, key: agentKey, verifier, contextRuleId: 0 }, { url: RPC }) }],
     spendControls: false,
   }));
   const budgetPayments: Record<string, unknown>[] = [];
-  for (const name of ['good', 'good', 'good', 'broken']) {
+  for (const name of ['broken', 'good', 'good', 'good']) {
     try {
       const r = await budgeted(`${base}/${name}`);
       const settle = r.headers.get('PAYMENT-RESPONSE');
@@ -393,7 +394,7 @@ async function main(): Promise<void> {
   const badRefused = walletPayments.slice(1).every((p) => String(p.outcome).startsWith('refused'));
   const facOk = facilitatorPayments[0]?.outcome === 'paid' && facilitatorPayments[1]?.outcome !== 'paid';
   const o = budgetPayments.map((p) => String(p.outcome));
-  const budgetOk = o[0] === 'paid' && o[1] === 'paid' && o[2] === 'refused by the wallet: over the spending limit' && o[3].startsWith('refused') && owner.raised === true && (owner.paymentAfter as { outcome?: string } | undefined)?.outcome === 'paid';
+  const budgetOk = o[0] === 'refused by the wallet: seller not trusted' && o[1] === 'paid' && o[2] === 'paid' && o[3] === 'refused by the wallet: over the spending limit' && owner.raised === true && (owner.paymentAfter as { outcome?: string } | undefined)?.outcome === 'paid';
   if (!budgetOk) log('budgeted wallet expectations not met', JSON.stringify(budgetPayments.map((p) => ({ outcome: p.outcome, facilitator: p.facilitator, reason: String(p.reason ?? '').slice(0, 160) }))));
   if (!goodPaid || !badRefused || !facOk || !budgetOk || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
     throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused} facilitatorHooks=${facOk} budget=${o.join(',')}`);

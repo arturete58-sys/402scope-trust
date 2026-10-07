@@ -3,7 +3,7 @@
 export * as attestations from './attestations/index.js';
 /** Trust policy for OpenZeppelin smart accounts: refuse payments to sellers below a score. */
 export * as trustPolicy from './trustPolicy/index.js';
-/** Agent wallet: an OpenZeppelin smart account with the trust policy installed. */
+/** Agent wallet: an OpenZeppelin smart account with the trust policy, an optional spending limit and an owner rule (passkey). */
 export * as agentWallet from './agentWallet/index.js';
 /** Ed25519 verifier for the smart account signers. */
 export * as ed25519Verifier from './ed25519Verifier/index.js';
