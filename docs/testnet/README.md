@@ -1,60 +1,66 @@
 # 402Scope Trust on Stellar testnet
 
-Run finished 2026-10-07T07:55:12.668Z. Every link below is a real testnet transaction or contract on Stellar Expert.
+Run finished 2026-10-07T08:14:35.119Z. Every link below is a real testnet transaction or contract on Stellar Expert.
 
 ## What happened
 
-1. Two independent attesters locked a bond and measured four x402 endpoints from two sellers with real paid calls.
-2. They wrote signed scores onchain, per endpoint and per seller, each with the Merkle root of its evidence.
-3. An agent wallet (OpenZeppelin smart account) with the 402Scope Trust policy installed paid over x402: **1 payment(s) went through, 2 were refused by the wallet itself.**
+1. Two independent attesters locked a bond and measured 5 x402 endpoints from 3 sellers with real paid calls.
+2. Sellers published delivery terms in their 402 challenge (`extensions.declarations`) and declared each response (`X-402-Declaration`), signed with the delivery receipt. The stale seller promised data under 60 s old and served 20-minute-old data, under its own signature.
+3. The attesters wrote signed scores onchain, per endpoint and per seller, each with the Merkle root of its evidence.
+4. An agent wallet (OpenZeppelin smart account) with the 402Scope Trust policy installed paid over x402: **1 payment(s) went through, 3 were refused by the wallet itself.**
+5. A standard x402 facilitator with 402Scope trust hooks refused to settle a plain payment to the stale seller.
 
 ## Contracts
 
 | Contract | Address |
 | --- | --- |
-| Attestation registry (bonds, scores, evidence) | [CDZXSM…HV43](https://stellar.expert/explorer/testnet/contract/CDZXSMQXVMEHO3AXT4MDV4LCSRRFFK23WGSX7IPNXGBD2OWVFUR3HV43) |
-| Trust policy (OpenZeppelin `Policy`) | [CBGWEL…FHWC](https://stellar.expert/explorer/testnet/contract/CBGWEL7LQVYXMVF2ODQBGRIZDA3VCWIF7LSDXISFTRYM64RX3Q3QFHWC) |
-| Agent wallet (OpenZeppelin smart account, policy: 2 of 2 attesters, score ≥ 80) | [CC65T2…YPOA](https://stellar.expert/explorer/testnet/contract/CC65T25V56N5ZH3M4HRYZBDOKMB2EDSWTO2OTBNFKPPXLKBEMDLNYPOA) |
-| ed25519 verifier | [CDILAR…W5QP](https://stellar.expert/explorer/testnet/contract/CDILARGRAZUONO3RAA6UPDHKNHTJ3HOL5KA72DS7PQTRTF2OUJQHW5QP) |
-| Test token SCOPE (SEP-41) | [CCMNPY…ECAF](https://stellar.expert/explorer/testnet/contract/CCMNPY2XTSGNT2CTRT3CDQ32MREX46QQJHL5BLZBHJM6LPPXZO56ECAF) |
+| Attestation registry (bonds, scores, evidence) | [CBTMWO…LZNR](https://stellar.expert/explorer/testnet/contract/CBTMWO7ROF5I4LM66B3KULC2UBOKVIRJGKPLKJGPYPBYR2T5TI7ULZNR) |
+| Trust policy (OpenZeppelin `Policy`) | [CDKYVD…QUN7](https://stellar.expert/explorer/testnet/contract/CDKYVD4X6QXXVI4VEPOTRBOJP7GXYF6ZCJ35EAXYEBBE4OILBYXVQUN7) |
+| Agent wallet (OpenZeppelin smart account, policy: 2 of 2 attesters, score ≥ 80) | [CAESX6…GQSQ](https://stellar.expert/explorer/testnet/contract/CAESX6QLEB7WKPIB7N3RR3C4A3BIIXVQ6FN22EWYNSF44INTLUAIGQSQ) |
+| ed25519 verifier | [CA6YPU…KGOE](https://stellar.expert/explorer/testnet/contract/CA6YPUHBPUKAMI7WDVATFMR7D63VBVFCFEYSHYSGHCB6AHQKGCC3KGOE) |
+| Test token SCOPE (SEP-41) | [CDJPF3…SFR4](https://stellar.expert/explorer/testnet/contract/CDJPF3DT2UMQYJW37FPMUNZNXT4GG4M744BQ4L6DYAKULXFFDGAISFR4) |
 
 ## Attesters
 
 | Attester | Bond | Registration |
 | --- | --- | --- |
-| [GACSZ3…KBVQ](https://stellar.expert/explorer/testnet/account/GACSZ3F5BMWCG2DAFDY3CVQBKWHQCCFEULHHOUCMJO4ZWESJE3X3KBVQ) | 500 SCOPE | [tx](https://stellar.expert/explorer/testnet/tx/be36ebdbcd5bac7316db9425fc2a0546948cc45c8d28fdb3f9853c45169857e3) |
-| [GDJT7S…S5K4](https://stellar.expert/explorer/testnet/account/GDJT7S6JTUQYT64YO573XGFCQFHM3LH744ULEF3MZWXPSMNQOESES5K4) | 500 SCOPE | [tx](https://stellar.expert/explorer/testnet/tx/487fb988309bf6beb8f679a81f5e9caee660b0b1868a560ebd5f1f5066cb7162) |
+| [GDCF2O…I6X4](https://stellar.expert/explorer/testnet/account/GDCF2OBBG55RORJSONDZETGDYRIQHZSAUWKPPVRSOW57ZFE46NCII6X4) | 500 SCOPE | [tx](https://stellar.expert/explorer/testnet/tx/a821aa924d5ab78a75f029dcf512ce7fc78823b3cc42d55c0dafc665ea52f32b) |
+| [GC5GOZ…3GNO](https://stellar.expert/explorer/testnet/account/GC5GOZ2RNJ2M3C4NOOWQT6X52S6MRGD5PEGWCIFNX7VTTYE3YXKH3GNO) | 500 SCOPE | [tx](https://stellar.expert/explorer/testnet/tx/2c923524ea6fb26e3a27639ec3f7a3a2ccfe32266181acdb2ae343fb40372861) |
 
 ## Seller scores (onchain)
 
 | Seller | Attester | Score | Paid calls | Delivered | Signed receipts | Attestation |
 | --- | --- | --- | --- | --- | --- | --- |
-| good seller | [GACSZ3…KBVQ](https://stellar.expert/explorer/testnet/account/GACSZ3F5BMWCG2DAFDY3CVQBKWHQCCFEULHHOUCMJO4ZWESJE3X3KBVQ) | 98 | 10 | 10 | 10 | [tx](https://stellar.expert/explorer/testnet/tx/cb0862cdc9da88622b0c8a7a861c72029c1f029dc75366ae2f8510943fe59ecd) |
-| good seller | [GDJT7S…S5K4](https://stellar.expert/explorer/testnet/account/GDJT7S6JTUQYT64YO573XGFCQFHM3LH744ULEF3MZWXPSMNQOESES5K4) | 98 | 6 | 6 | 6 | [tx](https://stellar.expert/explorer/testnet/tx/0b83ce9409a089e8cce3344ed9c022b57ef71efa82117e0a8e7fa460968737e3) |
-| bad seller | [GACSZ3…KBVQ](https://stellar.expert/explorer/testnet/account/GACSZ3F5BMWCG2DAFDY3CVQBKWHQCCFEULHHOUCMJO4ZWESJE3X3KBVQ) | 23 | 10 | 0 | 0 | [tx](https://stellar.expert/explorer/testnet/tx/f53a265c83acc27bdda5410fbaeacf0f81ea3e9592da5819cf5def54dd7e9616) |
-| bad seller | [GDJT7S…S5K4](https://stellar.expert/explorer/testnet/account/GDJT7S6JTUQYT64YO573XGFCQFHM3LH744ULEF3MZWXPSMNQOESES5K4) | 23 | 6 | 0 | 0 | [tx](https://stellar.expert/explorer/testnet/tx/5fe0ed421aa78d63eedfccda5a96ba6dabd916a0bc9e3fa55679d10baf41e5b3) |
+| good seller | [GDCF2O…I6X4](https://stellar.expert/explorer/testnet/account/GDCF2OBBG55RORJSONDZETGDYRIQHZSAUWKPPVRSOW57ZFE46NCII6X4) | 98 | 10 | 10 | 10 | [tx](https://stellar.expert/explorer/testnet/tx/a29f7104a5ff520e34c0781aa2f16c2b3f6f6cd630fb7595edeac26d705e8a1d) |
+| good seller | [GC5GOZ…3GNO](https://stellar.expert/explorer/testnet/account/GC5GOZ2RNJ2M3C4NOOWQT6X52S6MRGD5PEGWCIFNX7VTTYE3YXKH3GNO) | 100 | 6 | 6 | 6 | [tx](https://stellar.expert/explorer/testnet/tx/204c12344f6205f113bc3f3027f63b4f866b13318008abfa1fdeba69644ce502) |
+| bad seller | [GDCF2O…I6X4](https://stellar.expert/explorer/testnet/account/GDCF2OBBG55RORJSONDZETGDYRIQHZSAUWKPPVRSOW57ZFE46NCII6X4) | 18 | 10 | 0 | 0 | [tx](https://stellar.expert/explorer/testnet/tx/c0525787152b7cc9021ff0eee2cba426fac7adc218c1008738c4ab833413eb0e) |
+| bad seller | [GC5GOZ…3GNO](https://stellar.expert/explorer/testnet/account/GC5GOZ2RNJ2M3C4NOOWQT6X52S6MRGD5PEGWCIFNX7VTTYE3YXKH3GNO) | 18 | 6 | 0 | 0 | [tx](https://stellar.expert/explorer/testnet/tx/9a9be85a26a8676ea1a225f2ae5ff021a40169287a6e40547cf5658f35aca5b7) |
+| stale seller | [GDCF2O…I6X4](https://stellar.expert/explorer/testnet/account/GDCF2OBBG55RORJSONDZETGDYRIQHZSAUWKPPVRSOW57ZFE46NCII6X4) | 50 | 5 | 0 | 5 | [tx](https://stellar.expert/explorer/testnet/tx/b6efd2abbaeeb8d17415fdec1683ae5dc63edcb51774d8d69b1b22c7400d5e52) |
+| stale seller | [GC5GOZ…3GNO](https://stellar.expert/explorer/testnet/account/GC5GOZ2RNJ2M3C4NOOWQT6X52S6MRGD5PEGWCIFNX7VTTYE3YXKH3GNO) | 50 | 3 | 0 | 3 | [tx](https://stellar.expert/explorer/testnet/tx/898d8e9d104b9a3a8da3c0d575b326673e32deda4b4a2088ad934a321df3935f) |
 
-Trusted by 2 of 2 attesters at score 80 (contract `trusted_by`): good seller **yes**, bad seller **no**.
+Trusted by 2 of 2 attesters at score 80 (contract `trusted_by`): good seller **yes**, bad seller **no**, stale seller **no**.
 
 ## Endpoints (attester 1)
 
-| Endpoint | Seller | Score | Paid calls | Delivered | Valid receipts | Settlements | Attestation |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `/good` | good seller | 100 | 5 | 5 | 5 | [1](https://stellar.expert/explorer/testnet/tx/685f492d2940570d46e005f636ee06b520e52b611ce9437c98eef3f2f4449699) [2](https://stellar.expert/explorer/testnet/tx/d17939539d9949e3e3da161edf3e062766270e39e60284d14e770f0cd0da0e40) [3](https://stellar.expert/explorer/testnet/tx/a3ab35d93689671f4f134e19073a959dc47fdefa6fcb254cbe91e739e02442e4) [4](https://stellar.expert/explorer/testnet/tx/a36ff21658ce748a4d6702f38dd9a083b43f070f470b0be4149a119802d11322) [5](https://stellar.expert/explorer/testnet/tx/a5d0f8dd0d79d7252a3df0059f464c48c292c5f110293515bdb43da31483e003) | [tx](https://stellar.expert/explorer/testnet/tx/234dc27d5c86f692e26620b35e8e59fc5cbaec73dd87a63fffadc479975738c7) |
-| `/slow` | good seller | 95 | 5 | 5 | 5 | [1](https://stellar.expert/explorer/testnet/tx/9c47a856e61aa3142b5a84a5113a0316ed6bb32a27b02fecc52c1abde4a3a029) [2](https://stellar.expert/explorer/testnet/tx/8dad5aa2b1edff2644204243d2f8564295d8395c3abd93c58b23a84f0848bbc2) [3](https://stellar.expert/explorer/testnet/tx/479eb6133c06bbdc3506416ac9ddd5ff64fcc88c00ba228d7bad0ed71b1d79f1) [4](https://stellar.expert/explorer/testnet/tx/7ceac9770f9be69829bf408d09244b1c7e311eea52be5c72ea04a83253965c78) [5](https://stellar.expert/explorer/testnet/tx/d4badb057c4000f529546a81ecb8cc02ab7bf45bea749acd3f28bdaff39cbafd) | [tx](https://stellar.expert/explorer/testnet/tx/14e42ea8dc9042b1c29432add6a808ff76b882111e6e283328a8339ca0d2a67b) |
-| `/wrong-type` | bad seller | 35 | 5 | 0 | 0 | [1](https://stellar.expert/explorer/testnet/tx/07b53a43433b0f977f1cbbe29e65da3745db08cd8b278483cf397a77e621e6b6) [2](https://stellar.expert/explorer/testnet/tx/ce8348306a53499d6e144d367ae88c441186591ec2a9e7e456ac73c2241c2c32) [3](https://stellar.expert/explorer/testnet/tx/227993979dd3df1ce1532151e351ccd6e7374161fd677b672f9e49e72f5079d7) [4](https://stellar.expert/explorer/testnet/tx/732c3f73c2f7d725870bc22be948e5f4a9bd59f6fbd29a6e83e54d81d941a34b) [5](https://stellar.expert/explorer/testnet/tx/986e3770479aac4e6db93faa921e74120cb3e8f01ec1b0b0c4a26938f73656c4) | [tx](https://stellar.expert/explorer/testnet/tx/1439d9c0f16a6ca4af794c7c7f94969a331cc71c6d55c9fa5455d2ecb76b1170) |
-| `/broken` | bad seller | 10 | 5 | 0 | 0 | none | [tx](https://stellar.expert/explorer/testnet/tx/12aa4dd7e6b409437fdc9102870fc1c450e89962dce2b8d34dab858cede332b9) |
+| Endpoint | Seller | Score | Paid calls | Delivered | Valid receipts | Terms | Broke own declaration | Settlements | Attestation |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/good` | good seller | 100 | 5 | 5 | 5 | yes | 0 | [1](https://stellar.expert/explorer/testnet/tx/aa54d5f4822dc1c81b6513ad0436ac7cd6ecf0cd746796e6d3a6f97553a935f1) [2](https://stellar.expert/explorer/testnet/tx/8ff9983e3aa24b29f55f8fab91cd477844606ddb277606016358caf7f802b493) [3](https://stellar.expert/explorer/testnet/tx/292589d897ee3605e6579ca94c248362470b2ed11442219a6dcb5006ec5554cb) … | [tx](https://stellar.expert/explorer/testnet/tx/7c0ed650e99c78ed91d1cbc1c29700e81a248fb2d609fd18b2c52864678a20da) |
+| `/slow` | good seller | 95 | 5 | 5 | 5 | yes | 0 | [1](https://stellar.expert/explorer/testnet/tx/f4965eb4ccf1673f3c982808c783a8f2029aad1a61a524c1344a9a0a4a4cc2cf) [2](https://stellar.expert/explorer/testnet/tx/545cf8bfa8e61b7bdb7b68f6f27f3ba25a89ca650cd16ccb62559b06fafb8947) [3](https://stellar.expert/explorer/testnet/tx/1e3fb6d684190dae2b7a4a87949a2e5af4b85c7099b630a2822d851549bce41c) … | [tx](https://stellar.expert/explorer/testnet/tx/6a0fc1fa8bb31c8a992bca65805416d76f1e3ab42448fcdbee334d34f7b22654) |
+| `/wrong-type` | bad seller | 30 | 5 | 0 | 0 | no | 0 | [1](https://stellar.expert/explorer/testnet/tx/5b1b00e4186ce190a36f431235b58f000d44f391672888a4faab5439c0f2a9e0) [2](https://stellar.expert/explorer/testnet/tx/eeb9c284f2a112cc41481e6e06fdae15b1afa8af15d67aa19ae06962822be5fe) [3](https://stellar.expert/explorer/testnet/tx/99009e8af34ec842d238ecf7811a3931de1a6d5f2bfc5c86e94df213c6889a14) … | [tx](https://stellar.expert/explorer/testnet/tx/520d1066f6e6dbef84232d07a778001c0ca6fbdb577b034dbbd24eb0a02582ab) |
+| `/broken` | bad seller | 5 | 5 | 0 | 0 | no | 0 | none | [tx](https://stellar.expert/explorer/testnet/tx/048ad04289af38a858d16ab0fdc6b65dae566ad2309d359cd53d1f9666d4cd02) |
+| `/stale` | stale seller | 50 | 5 | 0 | 5 | yes | 5 of 5 (EXCEEDS_DECLARED_MAX) | [1](https://stellar.expert/explorer/testnet/tx/7f8b2fd710559ea132cddbaedcb8f09f7d82eb4a20e8e32ceb6eec169f72839d) [2](https://stellar.expert/explorer/testnet/tx/7dad8bb5c3218b2f86ceb5909aaeca8380e23cb0d27f527025ed7e3acd7f8253) [3](https://stellar.expert/explorer/testnet/tx/f76b733951002c06cecea4d1af0ae1ddaab0d42fcf76b28545fe26f0f6e6c110) … | [tx](https://stellar.expert/explorer/testnet/tx/a699f6e03bab2739de9dc369fefa4e0356df43531bbc525bb9fa9eb48d1a79c2) |
 
-Score parts (delivery 50, signed receipts 15, price 15, latency 10, declaration 10):
+Score parts, method v3 (delivery 50, signed receipts 15, price 15, latency 10, declaration 10: 5 for publishing delivery terms, 5 for a conformant challenge):
 
 - `/good`: {"delivery":50,"receipts":15,"price":15,"latency":10,"declaration":10}
 - `/slow`: {"delivery":50,"receipts":15,"price":15,"latency":5,"declaration":10}
-- `/wrong-type`: {"delivery":0,"receipts":0,"price":15,"latency":10,"declaration":10} — errors seen: declared application/json, got text/html; charset=utf-8
-- `/broken`: {"delivery":0,"receipts":0,"price":0,"latency":0,"declaration":10} — errors seen: no PAYMENT-RESPONSE header
+- `/wrong-type`: {"delivery":0,"receipts":0,"price":15,"latency":10,"declaration":5} — errors seen: declared application/json, got text/html; charset=utf-8
+- `/broken`: {"delivery":0,"receipts":0,"price":0,"latency":0,"declaration":5} — errors seen: no PAYMENT-RESPONSE header
+- `/stale`: {"delivery":0,"receipts":15,"price":15,"latency":10,"declaration":10} — errors seen: broke its own declaration: EXCEEDS_DECLARED_MAX
 
 ## Evidence checked onchain
 
-The good seller's attestation from attester 1 commits to 10 pieces of evidence (Merkle root `f64a7e6ee91ab2b5…`).
+The good seller's attestation from attester 1 commits to 10 pieces of evidence (Merkle root `90f49e6e435d164b…`).
 
 - A real piece of evidence, verified by the contract (`verify_seller_evidence`): **true**
 - The same evidence with the delivery result flipped: **false**
@@ -63,9 +69,10 @@ The good seller's attestation from attester 1 commits to 10 pieces of evidence (
 
 | Endpoint | Outcome | Detail |
 | --- | --- | --- |
-| `/good` | **paid** | [settlement](https://stellar.expert/explorer/testnet/tx/69e2c74c157407bf8922a4ae34cad745da4ab940b94dc74a47176392806e0fa3) |
+| `/good` | **paid** | [settlement](https://stellar.expert/explorer/testnet/tx/86968abc4bbaed75fe5f30e49088bae4bc92f2c863f300c547e8c36e5c591dae) |
 | `/broken` | **refused by the wallet policy** | `__check_auth` failed: the trust policy found no 2-of-2 quorum at score 80 for this seller (`Error(Auth, InvalidAction)`) |
 | `/wrong-type` | **refused by the wallet policy** | `__check_auth` failed: the trust policy found no 2-of-2 quorum at score 80 for this seller (`Error(Auth, InvalidAction)`) |
+| `/stale` | **refused by the wallet policy** | `__check_auth` failed: the trust policy found no 2-of-2 quorum at score 80 for this seller (`Error(Auth, InvalidAction)`) |
 
 The refusal happens inside the wallet's own `__check_auth`: the trust policy runs on the signed `transfer` authorization, so the payment cannot be made, whatever the agent's code does.
 
@@ -75,16 +82,47 @@ The refusal happens inside the wallet's own `__check_auth`: the trust policy run
 | --- | --- | --- | --- |
 | `/good` | trusted | 98 | true |
 | `/slow` | trusted | 98 | true |
-| `/wrong-type` | avoid | 23 | false |
-| `/broken` | avoid | 23 | false |
+| `/wrong-type` | avoid | 18 | false |
+| `/broken` | avoid | 18 | false |
+| `/stale` | caution | 50 | false |
 
 Off-chain trust guard for classic accounts: `/good` paid, `/broken` refused.
+
+## Any facilitator: trust hooks and ranked discovery
+
+A standard `x402Facilitator` from `@x402/core` with `withTrustHooks` in `block` mode, reading the onchain registry. A buyer **without** any trust guard pays:
+
+| Endpoint | Outcome |
+| --- | --- |
+| `/good` | **paid** |
+| `/stale` | **refused by the facilitator** (HTTP 402) |
+
+Facilitator decisions: good seller allowed (score 98); good seller allowed (score 98); stale seller blocked (score 50).
+
+A Bazaar listing of these endpoints, ranked by `rankResources` (trusted first, then by score):
+
+| Rank | Endpoint | Trusted | Score |
+| --- | --- | --- | --- |
+| 1 | `/good` | yes | 98 |
+| 2 | `/slow` | yes | 98 |
+| 3 | `/stale` | no | 50 |
+| 4 | `/wrong-type` | no | 18 |
+| 5 | `/broken` | no | 18 |
+
+## OpenZeppelin's Built on Stellar facilitator
+
+The same seller code, pointed at https://channels.openzeppelin.com/x402/testnet instead of a local facilitator. Supported: exact stellar:testnet.
+
+| Payer | Outcome | Detail |
+| --- | --- | --- |
+| classic account | **HTTP 402** | {} |
+| agent wallet | **HTTP 402** | {} |
 
 ## Stellar's official x402 demo (unpaid conformance check)
 
 Discovered through [its manifest](https://stellar.org/x402-demo/api/.well-known/x402).
 
-| Resource | HTTP | Stellar networks | Issues |
-| --- | --- | --- | --- |
-| https://stellar.org/x402-demo/api/weather/testnet?city=Valencia | 402 | stellar:testnet | none |
-| https://stellar.org/x402-demo/api/weather/mainnet?city=Valencia | 402 | stellar:pubnet | none |
+| Resource | HTTP | Stellar networks | Conformance issues | Delivery terms |
+| --- | --- | --- | --- | --- |
+| https://stellar.org/x402-demo/api/weather/testnet?city=Valencia | 402 | stellar:testnet | none | not published |
+| https://stellar.org/x402-demo/api/weather/mainnet?city=Valencia | 402 | stellar:pubnet | none | not published |
