@@ -7,8 +7,10 @@
 | [SEP-41](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) Soroban Token Interface | x402 `exact` payments are SEP-41 `transfer`s; attester bonds are a SEP-41 token | `smart-account.ts`, `contracts/attestations` |
 | [SEP-53](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0053.md) Sign and Verify Messages | Delivery receipts (`x402-receipt/2`) and endpoint claims are Stellar signed messages, checkable with `Keypair.verifyMessage` | [receipts.md](receipts.md) |
 | [SEP-1](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0001.md) Stellar Info File | Who is behind an attester: the account's `home_domain`, and that domain's `stellar.toml` listing the account under `ACCOUNTS` | `identity.ts`, `scope-trust attester-identity G…` |
+| [SEP-10](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0010.md) Stellar Web Authentication | Partner facilitators log in with their Stellar account to share their Bazaar, instead of holding a shared key | `sep10.ts`, [facilitators.md](facilitators.md#log-in-with-your-stellar-account-sep-10) |
 | [SEP-46](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0046.md) Contract Meta and [SEP-55](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0055.md) Contract Build Info | Every contract carries `source_repo` and `home_domain` in its meta; GitHub attests the exact wasm, so explorers can show a deployed contract as built from this repository | `.github/workflows/testnet-demo.yml`, `.github/workflows/release-contracts.yml` |
-| OpenZeppelin Stellar smart accounts | The agent wallet and the trust policy (`Policy` trait, `__check_auth`) | [agent-wallet.md](agent-wallet.md) |
+| OpenZeppelin Stellar smart accounts | The agent wallet, the trust policy and the spending limit (`Policy` trait, `__check_auth`) | [agent-wallet.md](agent-wallet.md) |
+| Stellar SDKs: JavaScript (bindings generator, `WebAuth`) and Python | Typed contract clients generated from the deployed wasm; the Python verifier | `src/clients`, [python/](../python) |
 
 ## Verified builds (SEP-55)
 

@@ -30,15 +30,17 @@ Part of the [402Scope observatory](https://402scope.org).
 | Merkle evidence, verifiable onchain | Working, same test vector in Rust and TypeScript — [docs/evidence.md](docs/evidence.md) |
 | Trust policy for OpenZeppelin smart accounts | Working, 8 end-to-end tests — [docs/agent-wallet.md](docs/agent-wallet.md) |
 | Agent wallet paying over x402 (`AgentWalletExactScheme`) | Working on testnet with a standard facilitator |
-| Who and how much: trust policy plus a spending limit on the same wallet (OpenZeppelin semantics, x402-compatible) | Working, 7 end-to-end tests — [docs/agent-wallet.md](docs/agent-wallet.md#who-and-how-much-trust-policy-plus-spending-limit) |
+| Who and how much: trust policy plus a spending limit on the same wallet (OpenZeppelin semantics, x402-compatible) | Working, 9 end-to-end tests — [docs/agent-wallet.md](docs/agent-wallet.md#who-and-how-much-trust-policy-plus-spending-limit) |
+| Passkey owner for agent wallets (WebAuthn verifier): the owner manages the budget with a passkey, the agent only pays | Working, tested — [docs/agent-wallet.md](docs/agent-wallet.md#the-owner-holds-a-passkey-the-agent-holds-a-key) |
+| Python verifier: receipts, evidence proofs, onchain quorum reads (`stellar-sdk` for Python) | Working, tested against the TypeScript vectors and each testnet deployment — [python/](python) |
 | Typed TypeScript clients for every contract, generated from the deployed wasm | Working — `import { clients } from '402scope-trust'`, [src/clients](src/clients) |
 | Any facilitator: trust hooks for `@x402/core` facilitators (flag or block), ranked Bazaar discovery, `/v1/sellers` API | Working, tested — [docs/facilitators.md](docs/facilitators.md) |
 | Off-chain trust guard for classic accounts, MCP server, read API | Working, tested |
 | Bazaar and `/.well-known/x402` discovery | Working |
 | End-to-end testnet demo in CI | [Testnet demo workflow](.github/workflows/testnet-demo.yml), report in [docs/testnet](docs/testnet/README.md) |
 | Draft of the declarations extension for the x402 specification | [Draft, not submitted](docs/proposals/x402-extension-declarations.md) |
-| Stellar standards: SEP-41 payments and bonds, SEP-53 signed receipts and claims, SEP-1 attester identity, SEP-46/55 verified contract builds | Working — [docs/stellar-standards.md](docs/stellar-standards.md) |
-| Contributions from partner facilitators (their Bazaar and the resources they settle) | Working, tested — [docs/facilitators.md](docs/facilitators.md#share-your-bazaar) |
+| Stellar standards: SEP-41 payments and bonds, SEP-53 signed receipts and claims, SEP-10 facilitator login, SEP-1 attester identity, SEP-46/55 verified contract builds | Working — [docs/stellar-standards.md](docs/stellar-standards.md) |
+| Contributions from partner facilitators (their Bazaar and the resources they settle), with a contributor key or SEP-10 login | Working, tested — [docs/facilitators.md](docs/facilitators.md#share-your-bazaar) |
 | Dispute process for slashing, mainnet, audit | Next |
 
 ## Quick start

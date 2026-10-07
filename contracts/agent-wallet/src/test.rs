@@ -17,7 +17,17 @@ use soroban_sdk::{
     },
     Bytes, IntoVal, TryFromVal,
 };
+use p256::{
+    ecdsa::{signature::hazmat::PrehashSigner, Signature as P256Signature, SigningKey as P256SigningKey},
+    elliptic_curve::sec1::ToEncodedPoint,
+    SecretKey as P256Key,
+};
+use scope_webauthn_verifier::WebAuthnVerifier;
 use stellar_accounts::smart_account::AuthDigestPreimage;
+use stellar_accounts::verifiers::{
+    utils::base64_url_encode,
+    webauthn::{WebAuthnSigData, AUTH_DATA_FLAGS_UP, AUTH_DATA_FLAGS_UV},
+};
 
 /// Cross-language test vector: the TypeScript signer (src/smart-account.ts)
 /// must produce the same digest for the same inputs.
@@ -52,6 +62,8 @@ struct World {
     wallet: Address,
     signer: Signer,
     key: SigningKey,
+    owner: Signer,
+    passkey: P256Key,
     limit: SpendingLimitPolicyClient<'static>,
 }
 
@@ -94,26 +106,62 @@ fn world() -> World {
     let trust_params = TrustPolicyParams { registry: registry.address.clone(), attesters: vec![&e, a1, a2], min_score: 80, quorum: 2, max_unverified: 0 };
     let limit_params = SpendingLimitParams { spending_limit: LIMIT, period_ledgers: PERIOD };
     let policies: Map<Address, Val> = map![&e, (trust, trust_params.into_val(&e)), (limit.address.clone(), limit_params.into_val(&e))];
-    let owner = Signer::Delegated(Address::generate(&e));
-    let wallet = e.register(AgentWallet, (vec![&e, signer.clone()], policies, Some(token.clone()), vec![&e, owner]));
+    // The owner holds a passkey (secp256r1, WebAuthn); its rule manages the wallet.
+    let passkey = P256Key::from_slice(&[7u8; 32]).unwrap();
+    let mut key_data = Bytes::from_slice(&e, &passkey.public_key().to_encoded_point(false).as_bytes());
+    key_data.extend_from_array(&[9u8; 16]); // credential id
+    let owner = Signer::External(e.register(WebAuthnVerifier, ()), key_data);
+    let wallet = e.register(AgentWallet, (vec![&e, signer.clone()], policies, Some(token.clone()), vec![&e, owner.clone()]));
     StellarAssetClient::new(&e, &token).mint(&wallet, &1_000);
     StellarAssetClient::new(&e, &other_token).mint(&wallet, &1_000);
-    World { e, token, other_token, good, bad, wallet, signer, key, limit }
+    World { e, token, other_token, good, bad, wallet, signer, key, owner, passkey, limit }
 }
 
 fn to_scval<T: IntoVal<Env, Val>>(e: &Env, v: T) -> ScVal {
     ScVal::try_from_val(e, &v.into_val(e)).unwrap()
 }
 
-/// Signs `token.transfer(wallet, to, amount)` with the agent key for rule 0, as a wallet does for an x402 payment.
-fn pay(w: &World, token: &Address, to: &Address, amount: i128) -> bool {
+#[derive(Clone, Copy)]
+enum Who {
+    Agent,
+    Owner,
+}
+
+/// What a passkey returns for a WebAuthn assertion over `digest`: the client
+/// data carries the digest as its challenge, and the device signs
+/// sha256(authenticator data || sha256(client data)) with its P-256 key.
+fn passkey_sign(w: &World, digest: &[u8; 32]) -> Bytes {
+    let e = &w.e;
+    let mut challenge = [0u8; 43];
+    base64_url_encode(&mut challenge, digest);
+    let client_data = std::format!(
+        r#"{{"type":"webauthn.get","challenge":"{}","origin":"https://402scope.org","crossOrigin":false}}"#,
+        std::str::from_utf8(&challenge).unwrap()
+    );
+    let client_data = Bytes::from_slice(e, client_data.as_bytes());
+    let mut auth_data = [0u8; 37];
+    auth_data[32] = AUTH_DATA_FLAGS_UP | AUTH_DATA_FLAGS_UV;
+    let authenticator_data = Bytes::from_array(e, &auth_data);
+    let mut msg = authenticator_data.clone();
+    msg.extend_from_array(&e.crypto().sha256(&client_data).to_array());
+    let hash = e.crypto().sha256(&msg).to_array();
+    let sig: P256Signature = P256SigningKey::from(&w.passkey).sign_prehash(&hash).unwrap();
+    let sig = sig.normalize_s().unwrap_or(sig).to_bytes();
+    let mut raw = [0u8; 64];
+    raw.copy_from_slice(&sig);
+    WebAuthnSigData { authenticator_data, client_data, signature: BytesN::from_array(e, &raw) }.to_xdr(e)
+}
+
+/// Sets the wallet's authorization for `contract.function(args)`, signed by
+/// the agent key or the owner's passkey, claiming context rule `rule_id`.
+fn authorize(w: &World, contract: &Address, function: &str, args: std::vec::Vec<ScVal>, rule_id: u32, who: Who) {
     let e = &w.e;
     let nonce = NONCE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let invocation = SorobanAuthorizedInvocation {
         function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
-            contract_address: token.clone().into(),
-            function_name: "transfer".try_into().unwrap(),
-            args: std::vec![to_scval(e, w.wallet.clone()), to_scval(e, to.clone()), to_scval(e, amount)].try_into().unwrap(),
+            contract_address: contract.clone().into(),
+            function_name: function.try_into().unwrap(),
+            args: args.try_into().unwrap(),
         }),
         sub_invocations: VecM::default(),
     };
@@ -124,9 +172,12 @@ fn pay(w: &World, token: &Address, to: &Address, amount: i128) -> bool {
         invocation: invocation.clone(),
     });
     let payload: BytesN<32> = e.crypto().sha256(&Bytes::from_slice(e, &preimage.to_xdr(Limits::none()).unwrap())).to_bytes();
-    let digest = AuthDigestPreimage { account: w.wallet.clone(), signature_payload: payload, context_rule_ids: vec![e, 0u32] }.digest(e);
-    let sig = Bytes::from_array(e, &w.key.sign(&digest.to_array()).to_bytes());
-    let auth = AuthPayload { signers: map![e, (w.signer.clone(), sig)], context_rule_ids: vec![e, 0u32] };
+    let digest = AuthDigestPreimage { account: w.wallet.clone(), signature_payload: payload, context_rule_ids: vec![e, rule_id] }.digest(e).to_array();
+    let (signer, sig) = match who {
+        Who::Agent => (w.signer.clone(), Bytes::from_array(e, &w.key.sign(&digest).to_bytes())),
+        Who::Owner => (w.owner.clone(), passkey_sign(w, &digest)),
+    };
+    let auth = AuthPayload { signers: map![e, (signer, sig)], context_rule_ids: vec![e, rule_id] };
     e.set_auths(&[SorobanAuthorizationEntry {
         credentials: SorobanCredentials::Address(SorobanAddressCredentials {
             address: w.wallet.clone().into(),
@@ -136,9 +187,46 @@ fn pay(w: &World, token: &Address, to: &Address, amount: i128) -> bool {
         }),
         root_invocation: invocation,
     }]);
+}
+
+/// Signs `token.transfer(wallet, to, amount)` with the agent key for rule 0, as a wallet does for an x402 payment.
+fn pay(w: &World, token: &Address, to: &Address, amount: i128) -> bool {
+    let e = &w.e;
+    authorize(w, token, "transfer", std::vec![to_scval(e, w.wallet.clone()), to_scval(e, to.clone()), to_scval(e, amount)], 0, Who::Agent);
     let ok = TokenClient::new(e, token).try_transfer(&w.wallet, to, &amount).is_ok();
     e.mock_all_auths();
     ok
+}
+
+/// Asks the spending limit policy to set a new limit, authorized as `who` under `rule_id`.
+fn set_limit(w: &World, limit: i128, rule_id: u32, who: Who) -> bool {
+    let e = &w.e;
+    authorize(w, &w.limit.address, "set_spending_limit", std::vec![to_scval(e, w.wallet.clone()), to_scval(e, 0u32), to_scval(e, limit)], rule_id, who);
+    let ok = w.limit.try_set_spending_limit(&w.wallet, &0, &limit).is_ok();
+    e.mock_all_auths();
+    ok
+}
+
+#[test]
+fn the_owner_raises_the_budget_with_a_passkey_the_agent_cannot() {
+    let w = world();
+    assert!(pay(&w, &w.token, &w.good, 250));
+    assert!(!pay(&w, &w.token, &w.good, 100));
+    // The agent key cannot change its own limit: its rule covers the token only,
+    // and it is not a signer of the owner's rule.
+    assert!(!set_limit(&w, 1_000, 0, Who::Agent));
+    assert!(!set_limit(&w, 1_000, 1, Who::Agent));
+    // The owner's passkey can.
+    assert!(set_limit(&w, 1_000, 1, Who::Owner));
+    assert_eq!(w.limit.window(&w.wallet, &0).unwrap().spending_limit, 1_000);
+    assert!(pay(&w, &w.token, &w.good, 100));
+}
+
+#[test]
+fn a_forged_passkey_signature_is_rejected() {
+    let w = world();
+    let other = World { passkey: P256Key::from_slice(&[8u8; 32]).unwrap(), ..w };
+    assert!(!set_limit(&other, 1_000, 1, Who::Owner));
 }
 
 #[test]

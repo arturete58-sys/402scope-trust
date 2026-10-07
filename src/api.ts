@@ -6,6 +6,7 @@ import type { EndpointRecord, Store } from './store.js';
 import type { ChainConfig } from './chain.js';
 import { sellerScores } from './seller.js';
 import { acceptContribution, contributorFor, contributorKeysFromEnv, parseContribution } from './contributions.js';
+import { accountFromToken, challenge, contributorAccountsFromEnv, token, webAuthFromEnv, type WebAuthConfig } from './sep10.js';
 
 const hits = new Map<string, number[]>();
 function limited(ip: string, perMinute: number): boolean {
@@ -49,21 +50,50 @@ function send(res: http.ServerResponse, status: number, body: unknown): void {
  *   GET /v1/endpoints/:key           full record, including paid calls
  *   GET /v1/check?url=...&min_score= the check-before-pay answer (probes unknown URLs, rate-limited)
  *   GET /v1/sellers/:payTo          seller score across its endpoints (used by facilitators)
- *   POST /v1/contributions          partner facilitators share resources (Bearer contributor key)
+ *   GET/POST /v1/auth               SEP-10 login for partner facilitators (when TRUST_SEP10_SECRET is set)
+ *   POST /v1/contributions          partner facilitators share resources (Bearer contributor key or SEP-10 token)
  */
-export function createApi(store: Store, opts: { checksPerMinute?: number; chain?: ChainConfig | null; contributors?: Map<string, Buffer> } = {}): http.Server {
+export function createApi(store: Store, opts: { checksPerMinute?: number; chain?: ChainConfig | null; contributors?: Map<string, Buffer>; webAuth?: WebAuthConfig | null; contributorAccounts?: Map<string, string> } = {}): http.Server {
   const contributors = opts.contributors ?? contributorKeysFromEnv();
+  const webAuth = opts.webAuth === undefined ? webAuthFromEnv() : opts.webAuth;
+  const accounts = opts.contributorAccounts ?? contributorAccountsFromEnv();
+  const readJson = async (req: http.IncomingMessage, max: number): Promise<unknown> => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const c of req) {
+      size += (c as Buffer).length;
+      if (size > max) throw Object.assign(new Error('too large'), { status: 413 });
+      chunks.push(c as Buffer);
+    }
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  };
   return http.createServer(async (req, res) => {
     // Trust X-Forwarded-For only from a reverse proxy on the same machine.
     const direct = req.socket.remoteAddress ?? '';
     const fwd = req.headers['x-forwarded-for'];
     const ip = fwd && /^(::ffff:)?127\.0\.0\.1$|^::1$/.test(direct) ? String(fwd).split(',')[0].trim() : direct;
-    if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET' }); return res.end(); }
+    if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST', 'access-control-allow-headers': 'authorization, content-type' }); return res.end(); }
     const u = new URL(req.url ?? '/', 'http://x');
+    if (u.pathname === '/v1/auth') {
+      // SEP-10: a facilitator proves it controls its Stellar account and gets a token.
+      if (!webAuth) return send(res, 404, { error: 'SEP-10 login is not enabled on this server.' });
+      if (limited(`auth:${ip}`, 20)) return send(res, 429, { error: 'Too many requests. Try again in a minute.' });
+      try {
+        if (req.method === 'GET') return send(res, 200, challenge(webAuth, u.searchParams.get('account') ?? ''));
+        if (req.method === 'POST') {
+          const body = (await readJson(req, 20_000)) as { transaction?: string };
+          const t = token(webAuth, String(body?.transaction ?? ''));
+          return send(res, 200, { token: t.token, account: t.account, expires_at: t.expiresAt, contributor: accounts.get(t.account) ?? null });
+        }
+      } catch (e) {
+        return send(res, 400, { error: (e as Error).message });
+      }
+    }
     if (req.method === 'POST' && u.pathname === '/v1/contributions') {
       // Partner facilitators share resources from their Bazaar or from the payments they settle.
-      const who = contributorFor(contributors, req.headers.authorization);
-      if (!who) return send(res, 401, { error: 'A contributor key is required. Contributions are open to facilitators; ask hello@402scope.org.' });
+      const account = webAuth ? accountFromToken(webAuth, req.headers.authorization) : null;
+      const who = contributorFor(contributors, req.headers.authorization) ?? (account ? accounts.get(account) ?? null : null);
+      if (!who) return send(res, 401, { error: account ? 'This Stellar account is not a registered contributor; ask hello@402scope.org.' : 'A contributor key or a SEP-10 token is required. Contributions are open to facilitators; ask hello@402scope.org.' });
       if (limited(`contrib:${who}`, 30)) return send(res, 429, { error: 'Too many contributions. Try again in a minute.' });
       const chunks: Buffer[] = [];
       let size = 0;

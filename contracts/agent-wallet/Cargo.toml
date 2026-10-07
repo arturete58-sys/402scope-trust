@@ -20,3 +20,5 @@ scope-trust-policy = { path = "../trust-policy" }
 scope-spending-limit = { path = "../spending-limit" }
 scope-ed25519-verifier = { path = "../ed25519-verifier" }
 ed25519-dalek = "2.1.1"
+scope-webauthn-verifier = { path = "../webauthn-verifier" }
+p256 = { version = "0.13.2", default-features = false, features = ["ecdsa"] }

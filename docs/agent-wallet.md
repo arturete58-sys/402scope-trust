@@ -20,6 +20,7 @@ agent → x402 client → wallet signs transfer(from, to, amount)
 | `contracts/spending-limit` | Spending limit policy: at most an amount in any rolling window of ledgers. OpenZeppelin's semantics and parameters, compatible with x402 facilitators (see below) |
 | `contracts/trust-policy` | An OpenZeppelin `Policy`. Installed per smart account and context rule, with its own parameters |
 | `contracts/ed25519-verifier` | OpenZeppelin `Verifier` for ed25519 keys, so the agent's key is an `External` signer |
+| `contracts/webauthn-verifier` | OpenZeppelin `Verifier` for WebAuthn (passkeys), so the owner can manage the wallet with a fingerprint or face instead of a seed phrase |
 | `contracts/attestations` | The [registry](attestation-spec.md) the policy reads |
 
 ## Policy parameters
@@ -72,6 +73,12 @@ __constructor(signers: Vec<Signer>, policies: Map<Address, Val>, token: Option<A
 | --- | --- | --- |
 | `None` | "agent", Default: the policies run on every call the agent signs | "admin", only if `admins` is not empty |
 | `Some(usdc)` | "payments", calls to `usdc` only: the agent key can pay in that token, within its policies, and do nothing else | "admin" (Default, no policies), only if `admins` is not empty, to change rules and policies |
+
+### The owner holds a passkey, the agent holds a key
+
+The `admins` of the wallet can be a passkey: `Signer::External(webauthn_verifier, public_key || credential_id)`, with the 65-byte uncompressed P-256 key the browser returns when the passkey is created. The owner then raises or lowers the budget, changes the attesters or rotates the agent key with a fingerprint or face, while the agent key can do one thing only: pay in the token, within both policies. The agent cannot change its own limit: its rule covers the token contract only, and it is not a signer of the owner's rule.
+
+`cargo test -p scope-agent-wallet` signs with a P-256 key exactly as a passkey does (client data whose `challenge` is the base64url of the smart account's auth digest; signature over `sha256(authenticator data || sha256(client data))`): the owner's passkey raises the limit, the agent key cannot, and a signature from another passkey is rejected.
 
 From TypeScript:
 

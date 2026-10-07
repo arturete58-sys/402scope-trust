@@ -6,3 +6,7 @@ target/
 .env
 contracts/**/test_snapshots/
 demo-result.json
+__pycache__/
+*.egg-info/
+.pytest_cache/
+python/build/

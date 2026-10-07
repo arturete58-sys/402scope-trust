@@ -13,7 +13,7 @@ on:
         default: '5'
   push:
     branches: [main]
-    paths: ['src/**', 'contracts/*/src/**', 'contracts/*/Cargo.toml', 'contracts/Cargo.toml', 'scripts/gen-clients.mjs', '.github/workflows/testnet-demo.yml']
+    paths: ['src/**', 'python/**', 'contracts/*/src/**', 'contracts/*/Cargo.toml', 'contracts/Cargo.toml', 'scripts/gen-clients.mjs', '.github/workflows/testnet-demo.yml']
   # Daily, so the onchain feed at 402scope.org/live always has recent events
   # (testnet is also reset from time to time).
   schedule:
@@ -66,6 +66,11 @@ jobs:
       - run: npm run build
       - name: Run the testnet demo
         run: bash scripts/run-and-annotate.sh "testnet demo" node dist/demo/testnet.js --wasm-dir contracts/target/wasm32v1-none/release --calls "${{ github.event.inputs.calls || '5' }}" --out demo-result.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Python verifier reads the fresh deployment
+        run: pip install ./python && python python/tests/onchain_check.py demo-result.json
       - name: Summary
         if: always()
         run: |

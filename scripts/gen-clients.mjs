@@ -21,6 +21,7 @@ const CONTRACTS = [
   ['agentWallet', 'scope_agent_wallet.wasm', 'Agent wallet: an OpenZeppelin smart account with the trust policy installed'],
   ['ed25519Verifier', 'scope_ed25519_verifier.wasm', 'Ed25519 verifier for the smart account signers'],
   ['spendingLimit', 'scope_spending_limit.wasm', 'Spending limit policy: at most an amount per rolling window, x402-compatible'],
+  ['webauthnVerifier', 'scope_webauthn_verifier.wasm', 'WebAuthn (passkey) verifier for smart account signers'],
 ];
 
 const wasmDir = process.argv[2];

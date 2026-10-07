@@ -18,7 +18,7 @@ X-402-Receipt: <base64url(JSON)>
   "resource": "https://api.example.com/paid-data",
   "payment": "<hex sha256 of the PAYMENT-SIGNATURE request header>",
   "body": "<hex sha256 of the response body bytes>",
-  "at": "2026-10-07T07:40:12.345Z",
+  "at": 1791360000,
   "decl": "<hex sha256 of the X-402-Declaration header, when the response has one>",
   "signer": "G... (Stellar public key)",
   "sig": "<base64 ed25519 signature>"
@@ -67,4 +67,6 @@ app.use(paymentMiddleware(/* routes, server */));
 
 The middleware buffers the body of paid 2xx responses, signs it and adds the header. It never signs unpaid or failed responses. The key must be the one behind the `payTo` address, otherwise receipts verify as `unbound`.
 
-Reference implementation and tests: `src/receipts.ts`, `src/test/`.
+`at` is the signing time in Unix seconds.
+
+Reference implementation and tests: `src/receipts.ts`, `src/test/`. Python: [`python/`](../python) (`verify_receipt`), held to the same test vectors.

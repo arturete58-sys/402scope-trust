@@ -17,7 +17,7 @@ export { evidenceLeaf, evidenceTree, buildTree, proofFor, verifyProof, type Merk
 export { sellerScores, type SellerScore } from './seller.js';
 export { type OnchainView } from './check.js';
 export {
-  AgentWalletExactScheme, walletAuthorizer, authDigest, externalSigner, trustPolicyParams, spendingLimitParams, deployAgentWallet, uploadWasm,
+  AgentWalletExactScheme, walletAuthorizer, authDigest, externalSigner, passkeySigner, trustPolicyParams, spendingLimitParams, deployAgentWallet, uploadWasm,
   type AgentWalletSigner, type TrustPolicyParams, type SpendingLimitParams,
 } from './smart-account.js';
 export {
@@ -34,5 +34,6 @@ export {
   type ContributedResource,
 } from './contributions.js';
 export { attesterIdentity, type AttesterIdentity, type IdentityOptions } from './identity.js';
+export { sep10Login, challenge as sep10Challenge, token as sep10Token, accountFromToken, webAuthFromEnv, contributorAccountsFromEnv, type WebAuthConfig } from './sep10.js';
 /** Typed clients for the 402Scope contracts, generated from their wasm. */
 export * as clients from './clients/index.js';

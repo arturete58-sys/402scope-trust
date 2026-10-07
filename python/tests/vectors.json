@@ -1,0 +1,61 @@
+{
+  "secret": "SADQOBYHA4DQOBYHA4DQOBYHA4DQOBYHA4DQOBYHA4DQOBYHA4DQP54X",
+  "signer": "GDVEU3DD4KOFECV66VIHWEZOYX4ZKR3WV27L464SIIPOU2IUI3JCZA57",
+  "resource": "https://api.example.com/paid",
+  "paymentHeader": "eyJwYXltZW50IjoidGVzdCJ9",
+  "body": "{\"pair\":\"XLM/USD\",\"price\":0.42}",
+  "at": 1791360000,
+  "declaration": "eyJmcmVzaG5lc3MiOnsiYWdlU2Vjb25kcyI6MX19",
+  "receipts": {
+    "v2": "eyJ2IjoieDQwMi1yZWNlaXB0LzIiLCJyZXNvdXJjZSI6Imh0dHBzOi8vYXBpLmV4YW1wbGUuY29tL3BhaWQiLCJwYXltZW50IjoiZWQ2MWExMmM0YjM4MmFiMTljNzFkMGNjNDM2NTg2OTc0OTdkYTcwMjgyOTA0Nzg5NDdjY2RlYmMzY2ExMTIyMyIsImJvZHkiOiJlZTE1ZTg3YzVjMDE0N2QwOGFkZDBmNzM5MGQ1YzNhNzVjNDEzMGQ5MDk3MDE2MGFiNTM3M2Q4YmFiYjQyYzg3IiwiYXQiOjE3OTEzNjAwMDAsInNpZ25lciI6IkdEVkVVM0RENEtPRkVDVjY2VklIV0VaT1lYNFpLUjNXVjI3TDQ2NFNJSVBPVTJJVUkzSkNaQTU3Iiwic2lnIjoiclZ4RmRKTkJWbjZoVlNvQTlLbHhSWkNJTjZMNFdRS25lWlJFNFFwcUxtVEkxOWhVdk9GTmxEbk9mMWt6bzBFLzliSlhZaWtWb1BFd3RYeXdDVXFJQXc9PSJ9",
+    "v2decl": "eyJ2IjoieDQwMi1yZWNlaXB0LzIiLCJyZXNvdXJjZSI6Imh0dHBzOi8vYXBpLmV4YW1wbGUuY29tL3BhaWQiLCJwYXltZW50IjoiZWQ2MWExMmM0YjM4MmFiMTljNzFkMGNjNDM2NTg2OTc0OTdkYTcwMjgyOTA0Nzg5NDdjY2RlYmMzY2ExMTIyMyIsImJvZHkiOiJlZTE1ZTg3YzVjMDE0N2QwOGFkZDBmNzM5MGQ1YzNhNzVjNDEzMGQ5MDk3MDE2MGFiNTM3M2Q4YmFiYjQyYzg3IiwiYXQiOjE3OTEzNjAwMDAsImRlY2wiOiJjODEyYTY3YjY3MDg5YTBmOTE0OTYyMWE1OWJjM2Q2Yzc0MzA1ZWFiNjQyOWVkMWM4Y2FjZmNjMTI5MzlmMTJhIiwic2lnbmVyIjoiR0RWRVUzREQ0S09GRUNWNjZWSUhXRVpPWVg0WktSM1dWMjdMNDY0U0lJUE9VMklVSTNKQ1pBNTciLCJzaWciOiJwQjQ1YW1LN0xQVDRYVWtqMElSU0hOaUNZb3h4SXcvSVN6bHJOa1dtbHVkeEFDKzg4by91N2RnQ25FVkpOdjJHb1Z5bW5QRHhVN3JtM2Z4ZW5uWnhBZz09In0",
+    "v1": "eyJ2IjoieDQwMi1yZWNlaXB0LzEiLCJyZXNvdXJjZSI6Imh0dHBzOi8vYXBpLmV4YW1wbGUuY29tL3BhaWQiLCJwYXltZW50IjoiZWQ2MWExMmM0YjM4MmFiMTljNzFkMGNjNDM2NTg2OTc0OTdkYTcwMjgyOTA0Nzg5NDdjY2RlYmMzY2ExMTIyMyIsImJvZHkiOiJlZTE1ZTg3YzVjMDE0N2QwOGFkZDBmNzM5MGQ1YzNhNzVjNDEzMGQ5MDk3MDE2MGFiNTM3M2Q4YmFiYjQyYzg3IiwiYXQiOjE3OTEzNjAwMDAsInNpZ25lciI6IkdEVkVVM0RENEtPRkVDVjY2VklIV0VaT1lYNFpLUjNXVjI3TDQ2NFNJSVBPVTJJVUkzSkNaQTU3Iiwic2lnIjoiMmczRlhncGNXVTBIU1ptSW1YNktlTDhVZUtaaEtNRlZXSkJaSkVBS3ZiQ0NaTUZkUlczYXVGR0IyMVZ0UkJFQUpkRDdoTU9LWk5TR1RZeUtROUFTQmc9PSJ9"
+  },
+  "evidence": {
+    "calls": [
+      {
+        "transaction": "tx0",
+        "bodyHash": "b0",
+        "delivered": true,
+        "receipt": "missing"
+      },
+      {
+        "transaction": "tx1",
+        "bodyHash": "b1",
+        "delivered": true,
+        "receipt": "valid"
+      },
+      {
+        "transaction": "tx2",
+        "bodyHash": "b2",
+        "delivered": true,
+        "receipt": "missing"
+      },
+      {
+        "transaction": "tx3",
+        "bodyHash": "b3",
+        "delivered": false,
+        "receipt": "valid"
+      },
+      {
+        "transaction": "tx4",
+        "bodyHash": "b4",
+        "delivered": true,
+        "receipt": "missing"
+      }
+    ],
+    "leaves": [
+      "c36352842a4d319a2f52a7813d36f6781f98a40ef5774ebfae7c0a47ae880cef",
+      "03ffa485a2b74731a58b3a286dd177e06897deb384183edd3a8afc836c1f2f38",
+      "c375bc898d1da7a40e215db77335a6c2b3fdfd59dd1ee1ea280510127229fe70",
+      "ba8b2e0d12133ffda6bb837c932b3147ef3ecfa0cd221a684643aa9dcdad90c6",
+      "08520142a3279acd27928bce2f228a8c6911df968e2d808d232b724881ae2666"
+    ],
+    "root": "1286d7fabba1ec1884b86fb10fe4cdd125e357e2d36b08a0d4d532a9663a52cb",
+    "proof2": [
+      "ba8b2e0d12133ffda6bb837c932b3147ef3ecfa0cd221a684643aa9dcdad90c6",
+      "fef26264310b1d3bc1c4114e02ca086d84c1990348761b5ac4cee68db838fcd0",
+      "08520142a3279acd27928bce2f228a8c6911df968e2d808d232b724881ae2666"
+    ]
+  }
+}

@@ -28,6 +28,15 @@ export function externalSigner(verifier: string, publicKey: Buffer): xdr.ScVal {
   return xdr.ScVal.scvVec([sym('External'), new Address(verifier).toScVal(), xdr.ScVal.scvBytes(publicKey)]);
 }
 
+/**
+ * OpenZeppelin `Signer::External(webauthnVerifier, publicKey || credentialId)` for a passkey:
+ * `publicKey` is the 65-byte uncompressed P-256 key from the WebAuthn credential.
+ */
+export function passkeySigner(webauthnVerifier: string, publicKey: Uint8Array, credentialId: Uint8Array): xdr.ScVal {
+  if (publicKey.length !== 65 || publicKey[0] !== 4) throw new Error('expected a 65-byte uncompressed P-256 public key');
+  return xdr.ScVal.scvVec([sym('External'), new Address(webauthnVerifier).toScVal(), xdr.ScVal.scvBytes(Buffer.concat([Buffer.from(publicKey), Buffer.from(credentialId)]))]);
+}
+
 /** sha256 of the XDR of `AuthDigestPreimage { account, signature_payload, context_rule_ids }`. */
 export function authDigest(account: string, signaturePayload: Buffer, contextRuleIds: number[]): Buffer {
   const preimage = struct({ account: new Address(account).toScVal(), context_rule_ids: u32vec(contextRuleIds), signature_payload: xdr.ScVal.scvBytes(signaturePayload) });

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scope-trust"
+version = "0.1.0"
+description = "Python verifier for 402Scope Trust: x402 delivery receipts (SEP-53), evidence proofs and onchain attester quorums on Stellar."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9"
+dependencies = ["stellar-sdk>=13.1,<17"]
+
+[project.urls]
+Homepage = "https://402scope.org"
+Source = "https://github.com/arturete58-sys/402scope-trust"
+
+[project.scripts]
+scope-trust-py = "scope_trust.cli:main"
+
+[tool.setuptools]
+packages = ["scope_trust"]

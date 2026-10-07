@@ -56,9 +56,29 @@ Discovery catalogues are partial. The CDP and Binance Bazaars do not overlap, an
 | Share what it settles | Resource URL, network and payTo of each verified payment; never the payer | `withTrustHooks(fac, { check, share: resourceSharer({ apiUrl, key }) })` |
 | Any other source | A Bazaar response or `{ resources: [{ url, network, payTo }] }` | `POST /v1/contributions` with `Authorization: Bearer <key>` |
 
+### Log in with your Stellar account (SEP-10)
+
+Instead of a shared key, a facilitator can authenticate with the Stellar account it already runs on, by [SEP-10](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0010.md) Web Authentication: it signs a challenge transaction (never submitted, no fee) and receives a token valid for an hour. No secret is shared with 402Scope, and a leaked token expires on its own.
+
+```ts
+import { sep10Login, shareBazaar } from '402scope-trust';
+
+const token = await sep10Login({ apiUrl: 'https://402scope.org', account: facilitatorKeypair.publicKey(), sign: facilitatorKeypair });
+await shareBazaar({ facilitatorUrl, apiUrl: 'https://402scope.org', key: token });
+```
+
+`sign` can also be a function that signs transaction XDR, so the key can stay in a wallet or a KMS. The client checks that the challenge is a SEP-10 challenge (sequence 0, only `manageData` operations) before signing it.
+
+| Server setting | Meaning |
+| --- | --- |
+| `TRUST_SEP10_SECRET` | Server signing key; its public key is the `SIGNING_KEY` in the home domain's `stellar.toml`, next to `WEB_AUTH_ENDPOINT` |
+| `TRUST_CONTRIBUTOR_ACCOUNTS` | `name:G…,name2:G…`: the accounts whose tokens may contribute |
+| `TRUST_HOME_DOMAIN`, `TRUST_WEB_AUTH_DOMAIN` | Default `402scope.org` |
+| `TRUST_SEP10_NETWORK` | `testnet` for testnet challenges; mainnet otherwise |
+
 Rules:
 
-- Contributing is opt-in and needs a contributor key (ask hello@402scope.org).
+- Contributing is opt-in and needs a contributor key or a registered Stellar account (ask hello@402scope.org).
 - A contribution only adds resources to measure. It never changes a score, and a facilitator cannot pay or contribute its way to a better one.
 - Each resource keeps the name of the facilitator that contributed it (`source: facilitator:<name>`), so coverage is attributable.
 - Sharing runs outside the payment path: batched every 5 minutes, failures dropped.

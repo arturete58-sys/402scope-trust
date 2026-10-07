@@ -165,11 +165,19 @@ async function main(): Promise<void> {
     check: async (payTo, net) => (enforce ? onchainCheck(payTo, net) : { trusted: true, score: null, source: 'onchain', reason: 'hooks off during measurement' }),
     onDecision: (d) => { if (enforce) facilitatorDecisions.push(d); },
   });
+  // What the facilitator said when it refused (onAfterVerify does not run for invalid payments).
   const verifyLog: unknown[] = [];
-  facilitator.onAfterVerify(async (ctx: unknown) => { const r = (ctx as { result?: { isValid: boolean; invalidReason?: string; invalidMessage?: string; payer?: string } }).result; if (r && !r.isValid) verifyLog.push(r); });
   const facClient = {
-    verify: (p: PaymentPayload, r: PaymentRequirements) => facilitator.verify(p, r),
-    settle: (p: PaymentPayload, r: PaymentRequirements) => facilitator.settle(p, r),
+    verify: async (p: PaymentPayload, r: PaymentRequirements) => {
+      const res = await facilitator.verify(p, r).catch((e: Error) => { verifyLog.push({ step: 'verify', error: e.message }); throw e; });
+      if (!res.isValid) verifyLog.push({ step: 'verify', reason: res.invalidReason, message: (res as { invalidMessage?: string }).invalidMessage });
+      return res;
+    },
+    settle: async (p: PaymentPayload, r: PaymentRequirements) => {
+      const res = await facilitator.settle(p, r).catch((e: Error) => { verifyLog.push({ step: 'settle', error: e.message }); throw e; });
+      if (!res.success) verifyLog.push({ step: 'settle', reason: res.errorReason, transaction: res.transaction });
+      return res;
+    },
     getSupported: async () => facilitator.getSupported(),
   };
   const resourceServer = new x402ResourceServer(facClient as never).register(NETWORK, new ServerScheme()).registerExtension(declarationsResourceServerExtension);
@@ -363,7 +371,7 @@ async function main(): Promise<void> {
   const facOk = facilitatorPayments[0]?.outcome === 'paid' && facilitatorPayments[1]?.outcome !== 'paid';
   const o = budgetPayments.map((p) => String(p.outcome));
   const budgetOk = o[0] === 'paid' && o[1] === 'paid' && o[2] === 'refused by the wallet: over the spending limit' && o[3].startsWith('refused');
-  if (!budgetOk) log('budgeted wallet expectations not met', o);
+  if (!budgetOk) log('budgeted wallet expectations not met', JSON.stringify(budgetPayments.map((p) => ({ outcome: p.outcome, facilitator: p.facilitator, reason: String(p.reason ?? '').slice(0, 160) }))));
   if (!goodPaid || !badRefused || !facOk || !budgetOk || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
     throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused} facilitatorHooks=${facOk} budget=${o.join(',')}`);
   }

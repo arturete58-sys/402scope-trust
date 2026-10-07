@@ -336,6 +336,40 @@ test('partner facilitators share their Bazaar and the resources they settle', as
   }
 });
 
+test('SEP-10: a facilitator logs in with its Stellar key and contributes with the token', async () => {
+  const { Networks } = await import('@stellar/stellar-sdk');
+  const { sep10Login, accountFromToken } = await import('../sep10.js');
+  const server = Keypair.random();
+  const partner = Keypair.random();
+  const stranger = Keypair.random();
+  const webAuth = { serverSecret: server.secret(), homeDomain: '402scope.org', webAuthDomain: '402scope.org', networkPassphrase: Networks.TESTNET };
+  const store = new Store(path.join(dir, 'sep10.json'));
+  const api3 = createApi(store, { contributors: new Map(), webAuth, contributorAccounts: new Map([[partner.publicKey(), 'acme']]) });
+  await new Promise<void>((r) => api3.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${(api3.address() as { port: number }).port}`;
+  const contribute = (tok: string) => fetch(`${url}/v1/contributions`, { method: 'POST', headers: { authorization: `Bearer ${tok}`, 'content-type': 'application/json' }, body: JSON.stringify({ resources: [{ url: 'https://via-sep10.example/a', network: 'stellar:pubnet', payTo: PAY_TO }] }) });
+  try {
+    const tok = await sep10Login({ apiUrl: url, account: partner.publicKey(), sign: partner });
+    assert.equal(accountFromToken(webAuth, `Bearer ${tok}`), partner.publicKey());
+    const r = await contribute(tok);
+    assert.equal(r.status, 200);
+    assert.equal(((await r.json()) as { contributor: string }).contributor, 'acme');
+    assert.equal(store.get('https://via-sep10.example/a')?.source, 'facilitator:acme');
+
+    // A valid login from an account that is not a contributor: authenticated, not allowed.
+    const tok2 = await sep10Login({ apiUrl: url, account: stranger.publicKey(), sign: stranger });
+    assert.equal((await contribute(tok2)).status, 401);
+
+    // A challenge signed by someone else is refused.
+    await assert.rejects(sep10Login({ apiUrl: url, account: partner.publicKey(), sign: stranger }), /login/);
+    // A tampered or expired token is refused.
+    assert.equal((await contribute(tok.slice(0, -2) + 'xx')).status, 401);
+    assert.equal(accountFromToken(webAuth, `Bearer ${tok}`, Date.now() + 2 * 3600_000), null);
+  } finally {
+    api3.close();
+  }
+});
+
 test('attester identity follows SEP-1 both ways: home_domain and stellar.toml ACCOUNTS', async () => {
   const { attesterIdentity } = await import('../identity.js');
   const listed = Keypair.random().publicKey();
