@@ -4,6 +4,7 @@ import { assertPublicUrl } from './probe.js';
 import { METHOD_VERSION } from './score.js';
 import type { EndpointRecord, Store } from './store.js';
 import type { ChainConfig } from './chain.js';
+import { sellerScores } from './seller.js';
 
 const hits = new Map<string, number[]>();
 function limited(ip: string, perMinute: number): boolean {
@@ -46,6 +47,7 @@ function send(res: http.ServerResponse, status: number, body: unknown): void {
  *   GET /v1/endpoints[?network=stellar:pubnet&min_score=80]
  *   GET /v1/endpoints/:key           full record, including paid calls
  *   GET /v1/check?url=...&min_score= the check-before-pay answer (probes unknown URLs, rate-limited)
+ *   GET /v1/sellers/:payTo          seller score across its endpoints (used by facilitators)
  */
 export function createApi(store: Store, opts: { checksPerMinute?: number; chain?: ChainConfig | null } = {}): http.Server {
   return http.createServer(async (req, res) => {
@@ -73,6 +75,13 @@ export function createApi(store: Store, opts: { checksPerMinute?: number; chain?
         const r = store.byKey(m[1]);
         return r ? send(res, 200, r) : send(res, 404, { error: 'No endpoint with this key.' });
       }
+      const sm = u.pathname.match(/^\/v1\/sellers\/([A-Za-z0-9:._-]{1,128})$/);
+      if (sm) {
+        const s = sellerScores(store.all()).find((x) => x.seller === decodeURIComponent(sm[1]));
+        if (!s) return send(res, 404, { error: 'Seller not measured yet.' });
+        const { evidence, ...rest } = s;
+        return send(res, 200, { ...rest, evidenceCalls: evidence.length });
+      }
       if (u.pathname === '/v1/check') {
         const target = u.searchParams.get('url');
         if (!target) return send(res, 400, { error: 'Add ?url=' });
@@ -82,7 +91,7 @@ export function createApi(store: Store, opts: { checksPerMinute?: number; chain?
         const min = Math.min(100, Math.max(0, Number(u.searchParams.get('min_score') ?? 80) || 0));
         return send(res, 200, await checkBeforePay(store, target, min, { chain: opts.chain }));
       }
-      return send(res, 404, { error: 'Not found. See /v1/endpoints and /v1/check.' });
+      return send(res, 404, { error: 'Not found. See /v1/endpoints, /v1/sellers and /v1/check.' });
     } catch {
       return send(res, 500, { error: 'Something went wrong.' });
     }

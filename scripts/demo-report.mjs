@@ -1,4 +1,4 @@
-// Turns demo-result.json (v2) into a Markdown report. Usage: node scripts/demo-report.mjs demo-result.json
+// Turns demo-result.json (v3) into a Markdown report. Usage: node scripts/demo-report.mjs demo-result.json
 import fs from 'node:fs';
 const r = JSON.parse(fs.readFileSync(process.argv[2] ?? 'demo-result.json', 'utf8'));
 const acct = (a) => `[${a.slice(0, 6)}…${a.slice(-4)}](https://stellar.expert/explorer/testnet/account/${a})`;
@@ -15,9 +15,14 @@ out.push(`Run finished ${r.finishedAt}. Every link below is a real testnet trans
 out.push('## What happened', '');
 const paid = (r.walletPayments ?? []).filter((p) => p.outcome === 'paid').length;
 const refused = (r.walletPayments ?? []).filter((p) => String(p.outcome).startsWith('refused')).length;
-out.push(`1. Two independent attesters locked a bond and measured four x402 endpoints from two sellers with real paid calls.`);
-out.push(`2. They wrote signed scores onchain, per endpoint and per seller, each with the Merkle root of its evidence.`);
-out.push(`3. An agent wallet (OpenZeppelin smart account) with the 402Scope Trust policy installed paid over x402: **${paid} payment(s) went through, ${refused} were refused by the wallet itself.**`, '');
+const nEndpoints = (r.endpoints ?? []).length;
+const nSellers = (r.sellers ?? []).length;
+out.push(`1. Two independent attesters locked a bond and measured ${nEndpoints} x402 endpoints from ${nSellers} sellers with real paid calls.`);
+if (r.version >= 3) out.push(`2. Sellers published delivery terms in their 402 challenge (\`extensions.declarations\`) and declared each response (\`X-402-Declaration\`), signed with the delivery receipt. The stale seller promised data under 60 s old and served 20-minute-old data, under its own signature.`);
+out.push(`${r.version >= 3 ? 3 : 2}. The attesters wrote signed scores onchain, per endpoint and per seller, each with the Merkle root of its evidence.`);
+out.push(`${r.version >= 3 ? 4 : 3}. An agent wallet (OpenZeppelin smart account) with the 402Scope Trust policy installed paid over x402: **${paid} payment(s) went through, ${refused} were refused by the wallet itself.**`);
+if (r.facilitatorHooks) out.push(`5. A standard x402 facilitator with 402Scope trust hooks refused to settle a plain payment to the stale seller.`);
+out.push('');
 
 const c = r.contracts ?? {};
 out.push('## Contracts', '');
@@ -38,14 +43,17 @@ out.push('| Seller | Attester | Score | Paid calls | Delivered | Signed receipts
 for (const s of r.sellers ?? []) for (const a of s.attestations) out.push(`| ${s.label} | ${acct(a.attester)} | ${a.score} | ${a.calls} | ${a.delivered} | ${a.receipts} | [tx](${a.tx}) |`);
 out.push('', 'Trusted by 2 of 2 attesters at score 80 (contract `trusted_by`): ' + (r.sellers ?? []).map((s) => `${s.label} **${s.trustedBy2of2 ? 'yes' : 'no'}**`).join(', ') + '.', '');
 
+
 out.push('## Endpoints (attester 1)', '');
-out.push('| Endpoint | Seller | Score | Paid calls | Delivered | Valid receipts | Settlements | Attestation |', '| --- | --- | --- | --- | --- | --- | --- | --- |');
+out.push('| Endpoint | Seller | Score | Paid calls | Delivered | Valid receipts | Terms | Broke own declaration | Settlements | Attestation |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
 for (const e of r.endpoints ?? []) {
   const s = e.score ?? {};
-  const settl = (e.settlements ?? []).length ? e.settlements.map((u, i) => `[${i + 1}](${u})`).join(' ') : 'none';
-  out.push(`| \`${e.endpoint}\` | ${e.seller} | ${s.score} | ${s.calls} | ${s.delivered} | ${s.receipts} | ${settl} | [tx](${e.attestationTx}) |`);
+  const settl = (e.settlements ?? []).length ? e.settlements.slice(0, 3).map((u, i) => `[${i + 1}](${u})`).join(' ') + (e.settlements.length > 3 ? ' …' : '') : 'none';
+  const broke = (e.declarations ?? []).filter((d) => d && d.providerAtFault && (d.basis === 'at-source' || d.basis === 'declared'));
+  const codes = [...new Set(broke.flatMap((d) => d.codes))];
+  out.push(`| \`${e.endpoint}\` | ${e.seller} | ${s.score} | ${s.calls} | ${s.delivered} | ${s.receipts} | ${e.terms ? 'yes' : 'no'} | ${broke.length ? `${broke.length} of ${s.calls} (${codes.join(', ')})` : '0'} | ${settl} | [tx](${e.attestationTx}) |`);
 }
-out.push('', 'Score parts (delivery 50, signed receipts 15, price 15, latency 10, declaration 10):', '');
+out.push('', 'Score parts, method v3 (delivery 50, signed receipts 15, price 15, latency 10, declaration 10: 5 for publishing delivery terms, 5 for a conformant challenge):', '');
 for (const e of r.endpoints ?? []) out.push(`- \`${e.endpoint}\`: ${JSON.stringify(e.score?.parts)}${e.errors?.length ? ` — errors seen: ${e.errors.join('; ')}` : ''}`);
 out.push('');
 
@@ -70,12 +78,36 @@ if (r.checks) {
 if (r.guardDecisions?.length) {
   out.push('Off-chain trust guard for classic accounts: ' + r.guardDecisions.map((d) => `\`${d.url}\` ${d.paid ? 'paid' : 'refused'}`).join(', ') + '.', '');
 }
+if (r.facilitatorHooks) {
+  out.push('## Any facilitator: trust hooks and ranked discovery', '');
+  out.push('A standard `x402Facilitator` from `@x402/core` with `withTrustHooks` in `block` mode, reading the onchain registry. A buyer **without** any trust guard pays:', '');
+  out.push('| Endpoint | Outcome |', '| --- | --- |');
+  for (const p of r.facilitatorHooks.payments) out.push(`| \`${p.endpoint}\` | ${p.outcome === 'paid' ? '**paid**' : `**refused by the facilitator** (${p.outcome})`} |`);
+  out.push('', 'Facilitator decisions: ' + r.facilitatorHooks.decisions.map((d) => `${d.seller} ${d.action}${d.score != null ? ` (score ${d.score})` : ''}`).join('; ') + '.', '');
+}
+if (r.rankedDiscovery) {
+  out.push('A Bazaar listing of these endpoints, ranked by `rankResources` (trusted first, then by score):', '');
+  out.push('| Rank | Endpoint | Trusted | Score |', '| --- | --- | --- | --- |');
+  r.rankedDiscovery.forEach((it, i) => out.push(`| ${i + 1} | \`${it.endpoint}\` | ${it.trusted ? 'yes' : 'no'} | ${it.score ?? '—'} |`));
+  out.push('');
+}
+if (r.openzeppelin) {
+  out.push("## OpenZeppelin's Built on Stellar facilitator", '');
+  const z = r.openzeppelin;
+  if (z.error) out.push(`Tried [${z.facilitator}](${z.facilitator}); not usable in this run: ${String(z.error).replace(/\|/g, '/')}`, '');
+  else {
+    out.push(`The same seller code, pointed at ${z.facilitator} instead of a local facilitator. Supported: ${(z.supported ?? []).join(', ') || 'none listed'}.`, '');
+    out.push('| Payer | Outcome | Detail |', '| --- | --- | --- |');
+    for (const p of z.payments ?? []) out.push(`| ${p.payer} | **${p.outcome}** | ${p.tx ? `[settlement](${p.tx})` : String(p.detail ?? '').replace(/\|/g, '/').replace(/\n/g, ' ').slice(0, 160)} |`);
+    out.push('');
+  }
+}
 if (r.officialDemo) {
   out.push("## Stellar's official x402 demo (unpaid conformance check)", '');
   if (r.officialDemo.error) out.push(`Not reachable in this run: ${r.officialDemo.error}`);
   else {
-    out.push(`Discovered through [its manifest](${r.officialDemo.manifest}).`, '', '| Resource | HTTP | Stellar networks | Issues |', '| --- | --- | --- | --- |');
-    for (const p of r.officialDemo.probes) out.push(`| ${p.url} | ${p.status} | ${p.networks.join(', ')} | ${p.issues.length ? p.issues.join('; ') : 'none'} |`);
+    out.push(`Discovered through [its manifest](${r.officialDemo.manifest}).`, '', '| Resource | HTTP | Stellar networks | Conformance issues | Delivery terms |', '| --- | --- | --- | --- | --- |');
+    for (const p of r.officialDemo.probes) out.push(`| ${p.url} | ${p.status} | ${p.networks.join(', ')} | ${p.issues.length ? p.issues.join('; ') : 'none'} | ${p.terms ? 'published' : 'not published'} |`);
   }
 }
 console.log(out.join('\n'));

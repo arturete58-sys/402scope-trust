@@ -1,19 +1,24 @@
 /**
- * End-to-end demo on Stellar testnet (v2). Every step is a real transaction:
+ * End-to-end demo on Stellar testnet (v3). Every step is a real transaction:
  *
  *   1. fresh accounts (friendbot) and a SEP-41 test token (SCOPE);
  *   2. contracts: attestation registry (bonds in SCOPE), trust policy,
  *      ed25519 verifier and an agent wallet (OpenZeppelin smart account)
  *      with the trust policy installed: 2 of 2 attesters, score >= 80;
- *   3. two sellers behind a local x402 facilitator: "good" (fast + slow
- *      endpoints, signed delivery receipts) and "bad" (wrong content type,
- *      broken endpoint, no receipts);
+ *   3. three sellers behind a local x402 facilitator: "good" (fast + slow
+ *      endpoints, delivery terms, per-response declarations, signed
+ *      receipts), "bad" (wrong content type, broken endpoint) and "stale"
+ *      (publishes the same terms, then serves data older than it promised
+ *      and signs that declaration itself);
  *   4. two bonded attesters measure independently with real paid calls,
  *      then write endpoint and seller attestations with Merkle evidence roots;
  *   5. a piece of evidence is checked onchain (and a forged one rejected);
  *   6. the agent wallet pays the good seller over x402 and its own policy
- *      refuses to pay the bad one;
- *   7. Stellar's official x402 demo is checked for conformance (unpaid).
+ *      refuses to pay the bad and stale ones;
+ *   7. the facilitator, with 402Scope trust hooks, refuses to settle a plain
+ *      (unguarded) payment to the stale seller; a Bazaar listing is ranked;
+ *   8. OpenZeppelin's "Built on Stellar" facilitator is tried as a drop-in;
+ *   9. Stellar's official x402 demo is checked for conformance (unpaid).
  *
  * Usage: node dist/demo/testnet.js --wasm-dir contracts/target/wasm32v1-none/release [--calls 5] [--out demo-result.json]
  */
@@ -25,6 +30,7 @@ import express from 'express';
 import { Address, Asset, BASE_FEE, Keypair, nativeToScVal, Networks, Operation, rpc, TransactionBuilder, type xdr } from '@stellar/stellar-sdk';
 import { x402Facilitator } from '@x402/core/facilitator';
 import { x402Client } from '@x402/core/client';
+import { HTTPFacilitatorClient } from '@x402/core/server';
 import { wrapFetchWithPayment } from '@x402/fetch';
 import { paymentMiddleware, x402ResourceServer } from '@x402/express';
 import { createEd25519Signer } from '@x402/stellar';
@@ -43,6 +49,9 @@ import { fromWellKnown } from '../indexer.js';
 import { measurePaid } from '../measure.js';
 import { probe } from '../probe.js';
 import { deliveryReceipts } from '../receipts.js';
+import { declare, declareDeliveryTerms, declarationsResourceServerExtension, readTerms, type DeliveryTerms } from '../declarations.js';
+import { onchainSellerChecker, rankResources, withTrustHooks, type TrustDecision } from '../facilitator.js';
+import { NO_DECLARATIONS } from '../probe.js';
 import { scoreEndpoint } from '../score.js';
 import { sellerScores } from '../seller.js';
 import { AgentWalletExactScheme, deployAgentWallet, uploadWasm } from '../smart-account.js';
@@ -86,11 +95,11 @@ async function main(): Promise<void> {
   const calls1 = Number(flag('calls', '5'));
   const calls2 = Math.max(3, Math.ceil(calls1 / 2));
   const server = new rpc.Server(RPC);
-  const out: Record<string, unknown> = { version: 2, network: NETWORK, startedAt: new Date().toISOString() };
+  const out: Record<string, unknown> = { version: 3, network: NETWORK, startedAt: new Date().toISOString() };
 
   // 1. Accounts and test token
   const k = {
-    admin: Keypair.random(), issuer: Keypair.random(), sellerGood: Keypair.random(), sellerBad: Keypair.random(),
+    admin: Keypair.random(), issuer: Keypair.random(), sellerGood: Keypair.random(), sellerBad: Keypair.random(), sellerStale: Keypair.random(),
     buyer1: Keypair.random(), buyer2: Keypair.random(), facilitator: Keypair.random(),
     attester1: Keypair.random(), attester2: Keypair.random(),
   };
@@ -101,7 +110,7 @@ async function main(): Promise<void> {
 
   log('issuing the SCOPE test token');
   const asset = new Asset('SCOPE', k.issuer.publicKey());
-  for (const kp of [k.sellerGood, k.sellerBad, k.buyer1, k.buyer2, k.attester1, k.attester2]) await classic(server, kp, [Operation.changeTrust({ asset })]);
+  for (const kp of [k.sellerGood, k.sellerBad, k.sellerStale, k.buyer1, k.buyer2, k.attester1, k.attester2]) await classic(server, kp, [Operation.changeTrust({ asset })]);
   await classic(server, k.issuer, [
     Operation.payment({ destination: k.buyer1.publicKey(), asset, amount: '100' }),
     Operation.payment({ destination: k.buyer2.publicKey(), asset, amount: '100' }),
@@ -139,6 +148,16 @@ async function main(): Promise<void> {
   // Smart-account payments run __check_auth and the policy (cross-contract reads), so they cost more
   // than a classic transfer; the facilitator's default fee ceiling (50,000 stroops) is raised here.
   const facilitator = new x402Facilitator().register(NETWORK, new FacilitatorScheme([createEd25519Signer(k.facilitator.secret(), NETWORK)], { maxTransactionFeeStroops: 2_000_000 }));
+  // 402Scope trust hooks on a standard facilitator. Off while attesters measure; enforced from step 7.
+  let enforce = false;
+  const onchainCheck = onchainSellerChecker({ contractId: registry, rpcUrl: RPC, networkPassphrase: PASS, attesters, quorum: 2 }, 80);
+  const facilitatorDecisions: TrustDecision[] = [];
+  withTrustHooks(facilitator, {
+    mode: 'block',
+    cacheMs: 0,
+    check: async (payTo, net) => (enforce ? onchainCheck(payTo, net) : { trusted: true, score: null, source: 'onchain', reason: 'hooks off during measurement' }),
+    onDecision: (d) => { if (enforce) facilitatorDecisions.push(d); },
+  });
   const verifyLog: unknown[] = [];
   facilitator.onAfterVerify(async (ctx: unknown) => { const r = (ctx as { result?: { isValid: boolean; invalidReason?: string; invalidMessage?: string; payer?: string } }).result; if (r && !r.isValid) verifyLog.push(r); });
   const facClient = {
@@ -146,24 +165,30 @@ async function main(): Promise<void> {
     settle: (p: PaymentPayload, r: PaymentRequirements) => facilitator.settle(p, r),
     getSupported: async () => facilitator.getSupported(),
   };
-  const resourceServer = new x402ResourceServer(facClient as never).register(NETWORK, new ServerScheme());
+  const resourceServer = new x402ResourceServer(facClient as never).register(NETWORK, new ServerScheme()).registerExtension(declarationsResourceServerExtension);
+  const terms: DeliveryTerms = { version: 1, freshness: { maxAgeSeconds: 60, basis: 'live' }, provenance: { source: 'demo-feed' }, perResponse: true, onBreach: 'refund' };
   const accepts = (payTo: Keypair) => ({ scheme: 'exact', network: NETWORK, payTo: payTo.publicKey(), price: { amount: PRICE, asset: token } });
   const routes = {
-    'GET /good': { accepts: accepts(k.sellerGood), description: 'Fast JSON quote', mimeType: 'application/json' },
-    'GET /slow': { accepts: accepts(k.sellerGood), description: 'Slow JSON quote', mimeType: 'application/json' },
+    'GET /good': { accepts: accepts(k.sellerGood), description: 'Fast JSON quote', mimeType: 'application/json', extensions: declareDeliveryTerms(terms) },
+    'GET /slow': { accepts: accepts(k.sellerGood), description: 'Slow JSON quote', mimeType: 'application/json', extensions: declareDeliveryTerms(terms) },
+    'GET /stale': { accepts: accepts(k.sellerStale), description: 'Promises data under 60 s old, serves 20-minute-old data', mimeType: 'application/json', extensions: declareDeliveryTerms(terms) },
     'GET /wrong-type': { accepts: accepts(k.sellerBad), description: 'Declares JSON, returns HTML', mimeType: 'application/json' },
     'GET /broken': { accepts: accepts(k.sellerBad), description: 'Always fails', mimeType: 'application/json' },
   };
   const app = express();
   app.use(['/good', '/slow'], deliveryReceipts({ secret: k.sellerGood.secret(), resourceUrl: (req) => `${base}${req.originalUrl}` }));
+  app.use('/stale', deliveryReceipts({ secret: k.sellerStale.secret(), resourceUrl: (req) => `${base}${req.originalUrl}` }));
   app.use(paymentMiddleware(routes as never, resourceServer));
-  app.get('/good', (_q, s) => { s.json({ pair: 'XLM/USD', price: 0.42, at: new Date().toISOString() }); });
-  app.get('/slow', (_q, s) => { setTimeout(() => s.json({ pair: 'XLM/USD', price: 0.42 }), 3500); });
+  const fresh = { freshness: { ageSeconds: 2, isStale: false, basis: 'live' as const }, provenance: { source: 'demo-feed' } };
+  app.get('/good', (_q, s) => { declare(s, fresh); s.json({ pair: 'XLM/USD', price: 0.42, at: new Date().toISOString() }); });
+  app.get('/slow', (_q, s) => { setTimeout(() => { declare(s, fresh); s.json({ pair: 'XLM/USD', price: 0.42 }); }, 3500); });
+  // Honest about its age, but the age breaks the terms it published: signed by its own key.
+  app.get('/stale', (_q, s) => { declare(s, { freshness: { ageSeconds: 1200, isStale: false, basis: 'cache' }, provenance: { source: 'demo-feed' } }); s.json({ pair: 'XLM/USD', price: 0.39 }); });
   app.get('/wrong-type', (_q, s) => { s.type('text/html').send('<html><body>not what you paid for</body></html>'); });
   app.get('/broken', (_q, s) => { s.status(500).json({ error: 'upstream down' }); });
   const http = await new Promise<import('node:http').Server>((ok) => { const h = app.listen(0, '127.0.0.1', () => ok(h)); });
   const base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`;
-  const names = ['good', 'slow', 'wrong-type', 'broken'];
+  const names = ['good', 'slow', 'wrong-type', 'broken', 'stale'];
 
   // 4. Two attesters measure independently and attest
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-demo-'));
@@ -175,7 +200,7 @@ async function main(): Promise<void> {
       const p = await probe(url);
       store.setProbe(url, p);
       log(`${label} measuring /${name}: ${n} paid calls`);
-      for (let i = 0; i < n; i++) store.addCall(url, await measurePaid(url, { secret: buyer.secret(), network: NETWORK, maxAmount: 100_000n, declaredMime: p.paymentRequired?.resource?.mimeType }));
+      for (let i = 0; i < n; i++) store.addCall(url, await measurePaid(url, { secret: buyer.secret(), network: NETWORK, maxAmount: 100_000n, declaredMime: p.paymentRequired?.resource?.mimeType, terms: readTerms(p.paymentRequired) }));
       store.setScore(url, scoreEndpoint(p.issues, store.get(url)!.calls));
       store.save();
     }
@@ -184,7 +209,7 @@ async function main(): Promise<void> {
   const stores = [await measureAll('attester1', k.buyer1, calls1), await measureAll('attester2', k.buyer2, calls2)];
   const ledger = await latestLedger(chain);
   const expires = ledger + DEFAULT_TTL_LEDGERS;
-  const sellerLabel = (s: string) => (s === k.sellerGood.publicKey() ? 'good seller' : 'bad seller');
+  const sellerLabel = (s: string) => (s === k.sellerGood.publicKey() ? 'good seller' : s === k.sellerStale.publicKey() ? 'stale seller' : 'bad seller');
   const endpoints: Record<string, unknown>[] = [];
   const sellers: Record<string, Record<string, unknown>> = {};
   for (const [i, store] of stores.entries()) {
@@ -198,6 +223,8 @@ async function main(): Promise<void> {
           seller: sellerLabel(r.payTo!),
           score: r.score,
           receipts: r.calls.map((x) => x.receipt),
+          terms: readTerms(r.probe?.paymentRequired) !== null,
+          declarations: r.calls.map((x) => x.declaration ?? null),
           settlements: r.calls.filter((x) => x.transaction).map((x) => txUrl(x.transaction as string)),
           errors: [...new Set(r.calls.map((x) => x.error).filter(Boolean))],
           attestationTx: txUrl(t),
@@ -236,7 +263,7 @@ async function main(): Promise<void> {
     spendControls: false,
   }));
   const walletPayments: Record<string, unknown>[] = [];
-  for (const name of ['good', 'broken', 'wrong-type']) {
+  for (const name of ['good', 'broken', 'wrong-type', 'stale']) {
     try {
       const r = await agent(`${base}/${name}`);
       const settle = r.headers.get('PAYMENT-RESPONSE');
@@ -266,13 +293,32 @@ async function main(): Promise<void> {
   for (const name of ['good', 'broken']) { try { await guarded(`${base}/${name}`); } catch { /* refused */ } }
   out.guardDecisions = decisions;
 
-  // 7. Stellar's official demo (unpaid conformance check)
+  // 7. Any facilitator: trust hooks on the facilitator, and a ranked Bazaar listing
+  enforce = true;
+  const plain = wrapFetchWithPayment(fetch, x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new ClientScheme(createEd25519Signer(k.buyer2.secret(), NETWORK)) }], spendControls: false }));
+  const facilitatorPayments: Record<string, unknown>[] = [];
+  for (const name of ['good', 'stale']) {
+    try {
+      const r = await plain(`${base}/${name}`);
+      facilitatorPayments.push({ endpoint: `/${name}`, outcome: r.ok ? 'paid' : `HTTP ${r.status}`, reason: r.ok ? undefined : verifyLog.at(-1) });
+    } catch (e) {
+      facilitatorPayments.push({ endpoint: `/${name}`, outcome: 'error', reason: (e as Error).message.slice(0, 200) });
+    }
+  }
+  out.facilitatorHooks = { mode: 'block', payments: facilitatorPayments, decisions: facilitatorDecisions.map((d) => ({ seller: sellerLabel(d.payTo), action: d.action, score: d.verdict?.score ?? null, reason: d.verdict?.reason ?? d.error })) };
+  const listing = names.map((name) => ({ resource: `${base}/${name}`, accepts: [{ network: NETWORK, payTo: stores[0].get(`${base}/${name}`)!.payTo! }] }));
+  out.rankedDiscovery = (await rankResources(listing, onchainCheck)).map((it) => ({ endpoint: String(it.resource).replace(base, ''), trusted: it.trust?.trusted ?? null, score: it.trust?.score ?? null }));
+
+  // 8. OpenZeppelin's Built on Stellar facilitator as a drop-in (testnet key from its public generator)
+  out.openzeppelin = await tryOpenZeppelin({ token, sellerGood: k.sellerGood, buyer: k.buyer1, wallet, agentKey, verifier });
+
+  // 9. Stellar's official demo (unpaid conformance check)
   try {
     const found = await fromWellKnown('https://stellar.org/x402-demo/api', { query: 'city=Valencia' });
     const probes = [];
     for (const d of found) {
       const p = await probe(d.url);
-      probes.push({ url: d.url, status: p.status, networks: p.stellar.map((a) => a.network), issues: p.issues.map((i) => i.message) });
+      probes.push({ url: d.url, status: p.status, networks: p.stellar.map((a) => a.network), terms: readTerms(p.paymentRequired) !== null, issues: p.issues.filter((i) => i.code !== NO_DECLARATIONS).map((i) => i.message) });
     }
     out.officialDemo = { manifest: 'https://stellar.org/x402-demo/api/.well-known/x402', probes };
   } catch (e) {
@@ -286,9 +332,56 @@ async function main(): Promise<void> {
   log('result written to', file);
   const goodPaid = walletPayments[0]?.outcome === 'paid';
   const badRefused = walletPayments.slice(1).every((p) => String(p.outcome).startsWith('refused'));
-  if (!goodPaid || !badRefused || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
-    throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused}`);
+  const facOk = facilitatorPayments[0]?.outcome === 'paid' && facilitatorPayments[1]?.outcome !== 'paid';
+  if (!goodPaid || !badRefused || !facOk || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
+    throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused} facilitatorHooks=${facOk}`);
   }
+}
+
+/**
+ * Pays the good seller through OpenZeppelin's hosted facilitator, from a
+ * classic account and from the agent wallet. Never fails the demo: what the
+ * hosted facilitator accepts (assets, smart-account payers, fee ceiling) is
+ * recorded as a finding.
+ */
+async function tryOpenZeppelin(o: { token: string; sellerGood: Keypair; buyer: Keypair; wallet: string; agentKey: Keypair; verifier: string }): Promise<Record<string, unknown>> {
+  const url = 'https://channels.openzeppelin.com/x402/testnet';
+  const res: Record<string, unknown> = { facilitator: url };
+  try {
+    const g = await fetch('https://channels.openzeppelin.com/testnet/gen', { signal: AbortSignal.timeout(20_000) });
+    const text = await g.text();
+    let key = text.trim();
+    try { const j = JSON.parse(text); key = j.apiKey ?? j.api_key ?? j.key ?? j.token ?? j.data?.apiKey ?? j.data?.api_key ?? key; } catch { /* plain text */ }
+    if (!g.ok || !key || key.length > 512) return { ...res, error: `testnet key generator returned ${g.status}` };
+    const auth = { Authorization: `Bearer ${key}` };
+    const client = new HTTPFacilitatorClient({ url, createAuthHeaders: async () => ({ verify: auth, settle: auth, supported: auth }) });
+    const supported = await client.getSupported();
+    res.supported = (supported.kinds ?? []).map((x: { scheme: string; network: string }) => `${x.scheme} ${x.network}`);
+    const rs = new x402ResourceServer(client).register(NETWORK, new ServerScheme());
+    const app = express();
+    app.use(paymentMiddleware({ 'GET /oz': { accepts: { scheme: 'exact', network: NETWORK, payTo: o.sellerGood.publicKey(), price: { amount: PRICE, asset: o.token } }, description: 'Quote via OpenZeppelin', mimeType: 'application/json' } } as never, rs));
+    app.get('/oz', (_q, s) => { s.json({ pair: 'XLM/USD', price: 0.42 }); });
+    const h = await new Promise<import('node:http').Server>((ok) => { const x = app.listen(0, '127.0.0.1', () => ok(x)); });
+    const target = `http://127.0.0.1:${(h.address() as AddressInfo).port}/oz`;
+    const attempt = async (label: string, f: typeof fetch) => {
+      try {
+        const r = await f(target, { signal: AbortSignal.timeout(90_000) });
+        const settle = r.headers.get('PAYMENT-RESPONSE');
+        const txh = settle ? JSON.parse(Buffer.from(settle, 'base64').toString()).transaction : null;
+        return { payer: label, outcome: r.ok ? 'paid' : `HTTP ${r.status}`, tx: txh ? txUrl(txh) : null, detail: r.ok ? undefined : (await r.text()).slice(0, 200) };
+      } catch (e) {
+        return { payer: label, outcome: 'error', detail: (e as Error).message.slice(0, 200) };
+      }
+    };
+    res.payments = [
+      await attempt('classic account', wrapFetchWithPayment(fetch, x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new ClientScheme(createEd25519Signer(o.buyer.secret(), NETWORK)) }], spendControls: false }))),
+      await attempt('agent wallet', wrapFetchWithPayment(fetch, x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new AgentWalletExactScheme({ account: o.wallet, key: o.agentKey, verifier: o.verifier, contextRuleId: 0 }, { url: RPC }) }], spendControls: false }))),
+    ];
+    h.close();
+  } catch (e) {
+    res.error = (e as Error).message.slice(0, 300);
+  }
+  return res;
 }
 
 main().catch((e) => {

@@ -1,5 +1,9 @@
 import { decodePaymentRequiredHeader } from '@x402/core/http';
 import type { PaymentRequired, PaymentRequirements } from '@x402/core/types';
+import { DECLARATIONS, validateTerms } from './declarations.js';
+
+/** Issue code for a challenge without delivery terms; scored apart from conformance issues. */
+export const NO_DECLARATIONS = 'no-declarations';
 
 export const USER_AGENT = '402ScopeTrust/0.1 (+https://402scope.org)';
 
@@ -104,5 +108,11 @@ export async function probe(url: string, opts: { timeoutMs?: number; fetchImpl?:
   res.stellar = (pr.accepts ?? []).filter((a) => String(a.network).startsWith('stellar:'));
   if (!res.stellar.length) res.issues.push({ code: 'no-stellar', message: 'no Stellar payment option offered' });
   res.stellar.forEach((a, i) => res.issues.push(...checkRequirement(a, i)));
+  const decl = (pr.extensions as Record<string, { info?: unknown }> | undefined)?.[DECLARATIONS];
+  if (!decl) res.issues.push({ code: NO_DECLARATIONS, message: 'no extensions.declarations: nothing is declared about freshness, quality or provenance' });
+  else {
+    const problems = validateTerms(decl.info);
+    if (problems.length) res.issues.push({ code: 'bad-declarations', message: `extensions.declarations: ${problems.join('; ')}` });
+  }
   return res;
 }

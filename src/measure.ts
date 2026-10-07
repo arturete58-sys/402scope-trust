@@ -5,6 +5,7 @@ import { ExactStellarScheme } from '@x402/stellar/exact/client';
 import type { PaymentRequirements } from '@x402/core/types';
 import { USER_AGENT } from './probe.js';
 import { decodeReceipt, RECEIPT_HEADER, sha256hex, verifyReceipt, type ReceiptCheck } from './receipts.js';
+import { checkDelivery, DECLARATION_HEADER, type DeliveryCheck, type DeliveryTerms } from './declarations.js';
 
 /** One paid call made by the measurer. */
 export interface PaidCall {
@@ -18,7 +19,7 @@ export interface PaidCall {
   transaction: string | null;
   contentType: string | null;
   bytes: number;
-  /** Delivered = paid, 2xx, settled, non-empty, and matching the declared MIME type. */
+  /** Delivered = paid, 2xx, settled, non-empty, matching the declared MIME type, and not breaking the seller's own declaration. */
   delivered: boolean;
   /** sha256 (hex) of the body received. */
   bodyHash?: string;
@@ -26,6 +27,8 @@ export interface PaidCall {
   receipt?: ReceiptCheck;
   /** The payTo that was paid. */
   payTo?: string;
+  /** What the seller declared about this response, checked against its own terms (see declarations.ts). */
+  declaration?: { basis: DeliveryCheck['basis']; providerAtFault: boolean; codes: string[]; ageSeconds: number | null };
   error?: string;
 }
 
@@ -39,6 +42,8 @@ export interface MeasureOptions {
   maxAmount: bigint;
   /** MIME type declared in the 402 challenge (resource.mimeType). */
   declaredMime?: string;
+  /** Delivery terms from the 402 challenge (extensions.declarations). */
+  terms?: DeliveryTerms | null;
   timeoutMs?: number;
 }
 
@@ -83,7 +88,12 @@ export async function measurePaid(url: string, opts: MeasureOptions): Promise<Pa
     const paid = chosen as PaymentRequirements | null;
     call.declaredAmount = paid?.amount ?? null;
     call.payTo = paid?.payTo;
-    call.receipt = paymentHeader ? verifyReceipt(decodeReceipt(r.headers.get(RECEIPT_HEADER)), { paymentHeader, body: buf, payTo: paid?.payTo }) : 'missing';
+    const declHeader = r.headers.get(DECLARATION_HEADER);
+    call.receipt = paymentHeader ? verifyReceipt(decodeReceipt(r.headers.get(RECEIPT_HEADER)), { paymentHeader, body: buf, payTo: paid?.payTo, declaration: declHeader }) : 'missing';
+    let json: unknown = null;
+    try { json = JSON.parse(Buffer.from(buf).toString('utf8')); } catch { /* not JSON */ }
+    const d = checkDelivery({ url, terms: opts.terms, header: declHeader, body: json });
+    call.declaration = { basis: d.basis, providerAtFault: d.providerAtFault, codes: d.codes, ageSeconds: d.declaration.freshness?.ageSeconds ?? null };
     try {
       const settle = http.getPaymentSettleResponse((n: string) => r.headers.get(n));
       call.transaction = settle.transaction ?? null;
@@ -93,6 +103,9 @@ export async function measurePaid(url: string, opts: MeasureOptions): Promise<Pa
     }
     call.ok = r.ok;
     if (r.ok && !mimeMatches(opts.declaredMime, call.contentType)) call.error = `declared ${opts.declaredMime}, got ${call.contentType}`;
+    // A seller that breaks what it declared itself did not deliver. Inferred
+    // (heuristic) declarations are recorded but never count against it.
+    else if (r.ok && d.providerAtFault && (d.basis === 'at-source' || d.basis === 'declared')) call.error = `broke its own declaration: ${d.codes.join(', ')}`;
     call.delivered = r.ok && !!call.transaction && call.bytes > 0 && !call.error;
   } catch (e) {
     call.latencyMs = Math.round(performance.now() - t0);

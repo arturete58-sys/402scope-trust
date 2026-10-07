@@ -14,6 +14,7 @@ import { createApi } from '../api.js';
 import { Store } from '../store.js';
 import { attestationKey } from '../key.js';
 import { fromWellKnown } from '../indexer.js';
+import { declareDeliveryTerms, readTerms } from '../declarations.js';
 
 const PAY_TO = Keypair.random().publicKey();
 let seller: http.Server;
@@ -26,6 +27,7 @@ const challenge = (url: string) => ({
   x402Version: 2,
   resource: { url, description: 'Test data', mimeType: 'application/json' },
   accepts: [{ scheme: 'exact', network: 'stellar:testnet', asset: USDC_TESTNET_ADDRESS, amount: '10000', payTo: PAY_TO, maxTimeoutSeconds: 60, extra: { areFeesSponsored: true } }],
+  extensions: declareDeliveryTerms({ version: 1, freshness: { maxAgeSeconds: 60 } }),
 });
 
 before(async () => {
@@ -126,7 +128,7 @@ test('MCP server lists its tools and answers check_before_pay', async () => {
   assert.match(r.result.content[0].text, /^UNKNOWN/);
 });
 
-test('probe accepts the challenge of the official @x402/express seller, and the trust guard blocks an unmeasured endpoint', async () => {
+test('probe accepts the challenge of the official @x402/express seller with delivery terms, and the trust guard blocks an unmeasured endpoint', async () => {
   const { default: express } = await import('express');
   const { x402Facilitator } = await import('@x402/core/facilitator');
   const { x402Client } = await import('@x402/core/client');
@@ -137,11 +139,13 @@ test('probe accepts the challenge of the official @x402/express seller, and the 
   const { ExactStellarScheme: S } = await import('@x402/stellar/exact/server');
   const { ExactStellarScheme: C } = await import('@x402/stellar/exact/client');
   const { withTrustGuard, localChecker } = await import('../guard.js');
+  const { declarationsResourceServerExtension } = await import('../declarations.js');
+  const terms = { version: 1 as const, freshness: { maxAgeSeconds: 30, basis: 'live' as const }, provenance: { source: 'test-feed' }, perResponse: true, onBreach: 'refund' as const };
   const fac = new x402Facilitator().register('stellar:testnet', new F([createEd25519Signer(Keypair.random().secret(), 'stellar:testnet')]));
   const fc = { verify: (p: any, r: any) => fac.verify(p, r), settle: (p: any, r: any) => fac.settle(p, r), getSupported: async () => fac.getSupported() };
-  const rs = new x402ResourceServer(fc as never).register('stellar:testnet', new S());
+  const rs = new x402ResourceServer(fc as never).register('stellar:testnet', new S()).registerExtension(declarationsResourceServerExtension);
   const app = express();
-  app.use(paymentMiddleware({ 'GET /data': { accepts: { scheme: 'exact', network: 'stellar:testnet', payTo: PAY_TO, price: { amount: '10000', asset: USDC_TESTNET_ADDRESS } }, description: 'Data', mimeType: 'application/json' } } as never, rs));
+  app.use(paymentMiddleware({ 'GET /data': { accepts: { scheme: 'exact', network: 'stellar:testnet', payTo: PAY_TO, price: { amount: '10000', asset: USDC_TESTNET_ADDRESS } }, description: 'Data', mimeType: 'application/json', extensions: declareDeliveryTerms(terms) } } as never, rs));
   app.get('/data', (_q: any, s: any) => s.json({ ok: true }));
   const h = await new Promise<http.Server>((ok) => { const x = app.listen(0, '127.0.0.1', () => ok(x)); });
   const url = `http://127.0.0.1:${(h.address() as { port: number }).port}/data`;
@@ -150,6 +154,8 @@ test('probe accepts the challenge of the official @x402/express seller, and the 
     assert.equal(p.status, 402);
     assert.deepEqual(p.issues, []);
     assert.equal(p.stellar[0].payTo, PAY_TO);
+    // The official server carries the delivery terms through unchanged.
+    assert.deepEqual(readTerms(p.paymentRequired), terms);
 
     const store = new Store(path.join(dir, 'guard.json'));
     const decisions: { paid: boolean; reason?: string }[] = [];
@@ -195,4 +201,91 @@ test('deliveryReceipts middleware signs exactly the body that was sent', async (
   } finally {
     h.close();
   }
+});
+
+test('a declaration is signed with the receipt, and a seller breaking its own terms is at fault', async () => {
+  const { default: express } = await import('express');
+  const { deliveryReceipts, decodeReceipt, verifyReceipt, RECEIPT_HEADER } = await import('../receipts.js');
+  const { declare, checkDelivery, DECLARATION_HEADER } = await import('../declarations.js');
+  const seller = Keypair.random();
+  const terms = { version: 1 as const, freshness: { maxAgeSeconds: 60 }, perResponse: true };
+  const app = express();
+  app.use(deliveryReceipts({ secret: seller.secret() }));
+  app.get('/fresh', (_q: any, s: any) => { declare(s, { freshness: { ageSeconds: 5, isStale: false }, provenance: { source: 'feed' } }); s.json({ price: 1 }); });
+  app.get('/stale', (_q: any, s: any) => { declare(s, { freshness: { ageSeconds: 1200, isStale: false } }); s.json({ price: 1 }); });
+  app.get('/silent', (_q: any, s: any) => s.json({ price: 1 }));
+  const h = await new Promise<http.Server>((ok) => { const x = app.listen(0, '127.0.0.1', () => ok(x)); });
+  const base = `http://127.0.0.1:${(h.address() as { port: number }).port}`;
+  const get = async (p: string) => {
+    const r = await fetch(`${base}${p}`, { headers: { 'PAYMENT-SIGNATURE': 'PAY-1' } });
+    const body = Buffer.from(await r.arrayBuffer());
+    return { r, body, decl: r.headers.get(DECLARATION_HEADER), rec: decodeReceipt(r.headers.get(RECEIPT_HEADER)) };
+  };
+  try {
+    const fresh = await get('/fresh');
+    assert.ok(fresh.rec?.decl, 'receipt binds the declaration');
+    assert.equal(verifyReceipt(fresh.rec, { paymentHeader: 'PAY-1', body: fresh.body, payTo: seller.publicKey(), declaration: fresh.decl }), 'valid');
+    // Swapping or dropping the declaration breaks the receipt.
+    assert.equal(verifyReceipt(fresh.rec, { paymentHeader: 'PAY-1', body: fresh.body, payTo: seller.publicKey(), declaration: null }), 'invalid');
+    const ok = checkDelivery({ url: `${base}/fresh`, terms, header: fresh.decl });
+    assert.deepEqual([ok.usable, ok.providerAtFault, ok.basis], [true, false, 'at-source']);
+
+    const stale = await get('/stale');
+    assert.equal(verifyReceipt(stale.rec, { paymentHeader: 'PAY-1', body: stale.body, payTo: seller.publicKey(), declaration: stale.decl }), 'valid');
+    const bad = checkDelivery({ url: `${base}/stale`, terms, header: stale.decl });
+    assert.deepEqual([bad.usable, bad.providerAtFault, bad.codes], [false, true, ['EXCEEDS_DECLARED_MAX']]);
+
+    const silent = await get('/silent');
+    assert.equal(silent.rec?.decl, undefined);
+    assert.deepEqual(checkDelivery({ url: `${base}/silent`, terms, header: silent.decl, body: { price: 1 } }).codes, ['MISSING_DECLARATION']);
+  } finally {
+    h.close();
+  }
+});
+
+test('trust hooks work on a standard @x402/core facilitator, and discovery from any facilitator gets ranked', async () => {
+  const { x402Facilitator } = await import('@x402/core/facilitator');
+  const { createEd25519Signer } = await import('@x402/stellar');
+  const { ExactStellarScheme: F } = await import('@x402/stellar/exact/facilitator');
+  const { withTrustHooks, discoveryProxy, apiSellerChecker } = await import('../facilitator.js');
+  const GOOD = Keypair.random().publicKey();
+  const BAD = Keypair.random().publicKey();
+  const check = async (payTo: string) => ({ trusted: payTo === GOOD, score: payTo === GOOD ? 98 : 23, source: 'local' as const });
+
+  const decisions: { payTo: string; action: string }[] = [];
+  const fac = withTrustHooks(new x402Facilitator().register('stellar:testnet', new F([createEd25519Signer(Keypair.random().secret(), 'stellar:testnet')])), { check, mode: 'block', onDecision: (d) => decisions.push(d) });
+  const req = (payTo: string) => ({ scheme: 'exact', network: 'stellar:testnet', asset: USDC_TESTNET_ADDRESS, amount: '10000', payTo, maxTimeoutSeconds: 60, extra: { areFeesSponsored: true } });
+  const payload = (payTo: string) => ({ x402Version: 2, accepted: req(payTo), payload: { transaction: 'AAAA' } });
+  const blocked = await fac.verify(payload(BAD) as never, req(BAD) as never).catch((e: Error) => ({ isValid: false, invalidReason: e.message }));
+  assert.equal(blocked.isValid, false);
+  assert.match(String((blocked as { invalidReason?: string }).invalidReason), /untrusted_seller/);
+  // A trusted seller passes the hook and reaches normal verification (which rejects this fake payload on its own).
+  await fac.verify(payload(GOOD) as never, req(GOOD) as never).catch(() => null);
+  assert.deepEqual(decisions.map((d) => [d.payTo, d.action]), [[BAD, 'blocked'], [GOOD, 'allowed']]);
+
+  // Discovery: any facilitator's Bazaar listing, ranked by trust.
+  const upstream = http.createServer((q, s) => {
+    s.writeHead(200, { 'content-type': 'application/json' });
+    s.end(JSON.stringify({ x402Version: 2, items: [
+      { resource: 'https://bad.test/x', accepts: [req(BAD)] },
+      { resource: 'https://new.test/x', accepts: [] },
+      { resource: 'https://good.test/x', accepts: [req(GOOD)] },
+    ], echo: q.url }));
+  });
+  await new Promise<void>((r) => upstream.listen(0, '127.0.0.1', r));
+  const proxy = discoveryProxy({ upstream: `http://127.0.0.1:${(upstream.address() as { port: number }).port}`, check });
+  await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', r));
+  try {
+    const r = await (await fetch(`http://127.0.0.1:${(proxy.address() as { port: number }).port}/discovery/resources?type=http&limit=3`)).json() as any;
+    assert.deepEqual(r.items.map((i: any) => i.resource), ['https://good.test/x', 'https://bad.test/x', 'https://new.test/x']);
+    assert.equal(r.items[0].trust.trusted, true);
+    assert.equal(r.echo, '/discovery/resources?type=http&limit=3');
+  } finally {
+    upstream.close();
+    proxy.close();
+  }
+
+  // The public API answers per seller; unknown sellers are not trusted.
+  const v = await apiSellerChecker(apiUrl)(GOOD, 'stellar:testnet');
+  assert.deepEqual([v.trusted, v.reason], [false, 'seller not measured yet']);
 });

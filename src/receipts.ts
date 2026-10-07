@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Keypair } from '@stellar/stellar-sdk';
 import type { NextFunction, Request, Response } from 'express';
+import { DECLARATION_HEADER } from './declarations.js';
 
 /**
  * x402 delivery receipts on Stellar (draft extension "x402-receipt/1").
@@ -10,6 +11,10 @@ import type { NextFunction, Request, Response } from 'express';
  * the PAYMENT-SIGNATURE header the buyer sent) and the response body (hash).
  * Any buyer can verify the receipt offline and keep it as evidence; an
  * attester can put it in the Merkle tree behind an onchain attestation.
+ *
+ * When the response carries an `X-402-Declaration` header, the receipt also
+ * signs its hash, so what the seller stated about the response (its age,
+ * source...) is bound to it as well.
  *
  * Header: `X-402-Receipt: base64url(JSON)`. See docs/receipts.md.
  */
@@ -26,6 +31,8 @@ export interface Receipt {
   body: string;
   /** Unix seconds. */
   at: number;
+  /** sha256 (hex) of the X-402-Declaration header value, when the response carried one. */
+  decl?: string;
   /** Stellar public key (G...) that signed: normally the seller's payTo. */
   signer: string;
   /** base64 ed25519 signature over `receiptMessage(...)`. */
@@ -37,13 +44,13 @@ export type ReceiptCheck = 'valid' | 'unbound' | 'invalid' | 'missing';
 export const sha256hex = (b: Uint8Array | string) => createHash('sha256').update(b).digest('hex');
 
 /** The exact bytes that are signed. */
-export function receiptMessage(r: Pick<Receipt, 'resource' | 'payment' | 'body' | 'at'>): Buffer {
-  return Buffer.from(`${RECEIPT_VERSION}\n${r.resource}\n${r.payment}\n${r.body}\n${r.at}`, 'utf8');
+export function receiptMessage(r: Pick<Receipt, 'resource' | 'payment' | 'body' | 'at' | 'decl'>): Buffer {
+  return Buffer.from(`${RECEIPT_VERSION}\n${r.resource}\n${r.payment}\n${r.body}\n${r.at}${r.decl ? `\n${r.decl}` : ''}`, 'utf8');
 }
 
-export function signReceipt(secret: string, p: { resource: string; paymentHeader: string; body: Uint8Array | string; at?: number }): Receipt {
+export function signReceipt(secret: string, p: { resource: string; paymentHeader: string; body: Uint8Array | string; at?: number; declaration?: string | null }): Receipt {
   const kp = Keypair.fromSecret(secret);
-  const base = { resource: p.resource, payment: sha256hex(p.paymentHeader), body: sha256hex(p.body), at: p.at ?? Math.floor(Date.now() / 1000) };
+  const base = { resource: p.resource, payment: sha256hex(p.paymentHeader), body: sha256hex(p.body), at: p.at ?? Math.floor(Date.now() / 1000), ...(p.declaration ? { decl: sha256hex(p.declaration) } : {}) };
   return { v: RECEIPT_VERSION, ...base, signer: kp.publicKey(), sig: kp.sign(receiptMessage(base)).toString('base64') };
 }
 
@@ -66,10 +73,12 @@ export function decodeReceipt(header: string | null | undefined): Receipt | null
  *   (e.g. a contract payTo, or a separate signing key);
  * - `invalid`: wrong signature or hashes; `missing`: no receipt.
  */
-export function verifyReceipt(r: Receipt | null, expect: { paymentHeader: string; body: Uint8Array | string; payTo?: string | null }): ReceiptCheck {
+export function verifyReceipt(r: Receipt | null, expect: { paymentHeader: string; body: Uint8Array | string; payTo?: string | null; declaration?: string | null }): ReceiptCheck {
   if (!r) return 'missing';
   try {
     if (r.payment !== sha256hex(expect.paymentHeader) || r.body !== sha256hex(expect.body)) return 'invalid';
+    // A declaration received must be the one signed, and a signed one must have been received.
+    if ((r.decl ?? null) !== (expect.declaration ? sha256hex(expect.declaration) : null)) return 'invalid';
     const ok = Keypair.fromPublicKey(r.signer).verify(receiptMessage(r), Buffer.from(r.sig, 'base64'));
     if (!ok) return 'invalid';
     return expect.payTo && expect.payTo === r.signer ? 'valid' : 'unbound';
@@ -105,7 +114,8 @@ export function deliveryReceipts(opts: { secret: string; resourceUrl?: (req: Req
       const body = Buffer.concat(chunks);
       if (res.statusCode >= 200 && res.statusCode < 300 && !res.headersSent) {
         const resource = opts.resourceUrl ? opts.resourceUrl(req) : `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-        res.setHeader(RECEIPT_HEADER, encodeReceipt(signReceipt(opts.secret, { resource, paymentHeader, body })));
+        const declaration = res.getHeader(DECLARATION_HEADER);
+        res.setHeader(RECEIPT_HEADER, encodeReceipt(signReceipt(opts.secret, { resource, paymentHeader, body, declaration: typeof declaration === 'string' ? declaration : null })));
       }
       if (!res.headersSent) res.setHeader('content-length', String(body.length));
       if (body.length) write(body);

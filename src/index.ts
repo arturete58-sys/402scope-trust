@@ -20,3 +20,12 @@ export {
   AgentWalletExactScheme, walletAuthorizer, authDigest, externalSigner, trustPolicyParams, deployAgentWallet, uploadWasm,
   type AgentWalletSigner, type TrustPolicyParams,
 } from './smart-account.js';
+export {
+  DECLARATIONS, DECLARATION_HEADER, TERMS_SCHEMA, declareDeliveryTerms, declarationsResourceServerExtension, declare, declarations,
+  encodeDeclaration, decodeDeclaration, readTerms, validateTerms, checkDelivery, REASONS,
+  type DeliveryTerms, type ResponseDeclaration, type DeliveryCheck, type ReasonCode,
+} from './declarations.js';
+export {
+  withTrustHooks, onchainSellerChecker, apiSellerChecker, localSellerChecker, cached, rankResources, discoveryProxy,
+  type SellerChecker, type SellerVerdict, type TrustDecision,
+} from './facilitator.js';

@@ -38,9 +38,9 @@ test('score: failed deliveries and slow responses cost points', () => {
   // Median latency 9000 ms -> 5 points.
   const calls = [call({ latencyMs: 9500 }), call({ delivered: false, receipt: 'missing', latencyMs: 15000 }), call({ latencyMs: 8000 }), call({ delivered: false, receipt: 'invalid', latencyMs: 9000 }), call({})];
   const s = scoreEndpoint([{ code: 'fees', message: 'x' }], calls);
-  // Delivery 3/5 of 50, receipts 3/5 of 15, price 15, latency 5, declaration 10 - 2.
-  assert.deepEqual(s.parts, { delivery: 30, receipts: 9, price: 15, latency: 5, declaration: 8 });
-  assert.equal(s.score, 67);
+  // Delivery 3/5 of 50, receipts 3/5 of 15, price 15, latency 5, declaration 5 (terms) + 5 - 1.
+  assert.deepEqual(s.parts, { delivery: 30, receipts: 9, price: 15, latency: 5, declaration: 9 });
+  assert.equal(s.score, 68);
   assert.equal(s.receipts, 3);
   assert.equal(verdict(s, 80), 'caution');
 });
@@ -115,4 +115,44 @@ test('seller score is the call-weighted average of its endpoints', () => {
   assert.equal(s.score, 84);
   assert.equal(s.endpoints, 2);
   assert.equal(s.calls, 10);
+});
+
+import { checkDelivery, validateTerms, declareDeliveryTerms } from '../declarations.js';
+import { NO_DECLARATIONS } from '../probe.js';
+
+test('score: publishing no delivery terms costs 5 points', () => {
+  const s = scoreEndpoint([{ code: NO_DECLARATIONS, message: 'x' }], Array.from({ length: 5 }, () => call({})));
+  assert.equal(s.parts.declaration, 5);
+  assert.equal(s.score, 95);
+});
+
+test('declarations: fault is the provider\'s only when it breaks what it declared', () => {
+  const terms = { version: 1 as const, freshness: { maxAgeSeconds: 600 } };
+  const enc = (d: object) => Buffer.from(JSON.stringify(d)).toString('base64url');
+  // Within its own terms but above the caller's limit: unusable, not the provider's fault.
+  const c = checkDelivery({ url: 'https://a.test/x', terms, header: enc({ freshness: { ageSeconds: 120 } }), maxAgeSeconds: 60 });
+  assert.deepEqual([c.usable, c.providerAtFault, c.codes], [false, false, ['EXCEEDS_CALLER_LIMIT']]);
+  // Declares itself stale.
+  assert.equal(checkDelivery({ url: 'https://a.test/x', header: enc({ freshness: { isStale: true } }) }).providerAtFault, true);
+  // Contradicts the source it published.
+  const src = checkDelivery({ url: 'https://a.test/x', terms: { version: 1, provenance: { source: 'EIA-930' } }, header: enc({ provenance: { source: 'scraped' } }) });
+  assert.deepEqual(src.codes, ['BREAKS_TERMS']);
+});
+
+test('declarations: without a header, the x402-declarations vocabulary is read from the body', () => {
+  // Same input as the x402-declarations conformance case "fault-is-providers".
+  const c = checkDelivery({ url: 'https://example.test/hugen', body: { quality_state: 'stale', quote_age_ms: 1140535 }, maxAgeSeconds: 60 });
+  assert.equal(c.usable, false);
+  assert.equal(c.providerAtFault, true);
+  assert.equal(c.declaration.freshness?.ageSeconds, 1141);
+  assert.notEqual(c.basis, 'at-source');
+  // Nothing recognisable: no invented values.
+  const none = checkDelivery({ url: 'https://nobody.test/x', body: { a: 1 } });
+  assert.deepEqual([none.basis, none.usable, none.declaration.freshness?.ageSeconds ?? null], ['none', true, null]);
+});
+
+test('declarations: terms are validated', () => {
+  assert.deepEqual(validateTerms({ version: 1, freshness: { maxAgeSeconds: 60, basis: 'live' }, onBreach: 'refund' }), []);
+  assert.equal(validateTerms({ version: 2 }).length, 1);
+  assert.throws(() => declareDeliveryTerms({ version: 1, freshness: { maxAgeSeconds: -1 } }));
 });

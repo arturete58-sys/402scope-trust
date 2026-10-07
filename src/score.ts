@@ -1,8 +1,8 @@
-import type { Issue } from './probe.js';
+import { NO_DECLARATIONS, type Issue } from './probe.js';
 import type { PaidCall } from './measure.js';
 
 /** Version of the published scoring method (docs/scoring.md). */
-export const METHOD_VERSION = 2;
+export const METHOD_VERSION = 3;
 /** Fewer paid calls than this and the score is marked low-confidence. */
 export const MIN_SAMPLE = 5;
 /** Paid-call latency thresholds; they include settlement (~5 s on Stellar). */
@@ -31,17 +31,22 @@ export function median(xs: number[]): number | null {
 }
 
 /**
- * Method v2, out of 100:
+ * Method v3, out of 100:
  *  - delivery 50: share of paid calls that delivered
  *  - receipts 15: share of paid calls with a valid delivery receipt signed by the payTo
  *  - price 15: every settled call charged the declared amount
  *  - latency 10: median paid-call latency <= 7 s gets 10, <= 12 s gets 5. Paid latency
  *    includes onchain settlement, which x402 servers finish before answering
  *    (about one ledger, ~5 s on Stellar)
- *  - declaration 10: minus 2 per issue in the unpaid 402 challenge
+ *  - declaration 10: 5 for publishing delivery terms (extensions.declarations),
+ *    5 for a conformant 402 challenge, minus 1 per issue
+ * Delivery (v3) also requires that the seller did not break its own declaration.
  */
 export function scoreEndpoint(issues: Issue[], calls: PaidCall[], charged: (c: PaidCall) => string | null = (c) => c.declaredAmount): Score {
-  const declaration = Math.max(0, 10 - 2 * issues.length);
+  // Declaration 10: 5 for publishing delivery terms (extensions.declarations),
+  // 5 for a conformant challenge, minus 1 per conformance issue.
+  const conformance = issues.filter((i) => i.code !== NO_DECLARATIONS);
+  const declaration = (issues.some((i) => i.code === NO_DECLARATIONS) ? 0 : 5) + Math.max(0, 5 - conformance.length);
   const n = calls.length;
   const delivered = calls.filter((c) => c.delivered).length;
   const receipts = calls.filter((c) => c.receipt === 'valid').length;
