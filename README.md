@@ -24,7 +24,7 @@ Part of the [402Scope observatory](https://402scope.org).
 | Unpaid probe of the 402 challenge (x402 v2, Stellar `exact`) | Working, tested against the official `@x402/express` seller and Stellar's x402 demo |
 | Paid measurement through the standard x402 client (`@x402/stellar`) | Working |
 | Delivery declarations as an x402 extension (`extensions.declarations`, `X-402-Declaration`), in the [x402-declarations](https://github.com/arturete58-sys/x402-declarations) vocabulary | Working, tested with the official `@x402/express` — [docs/declarations.md](docs/declarations.md) |
-| Signed delivery receipts (`X-402-Receipt`), binding body and declaration | Working, tested — [docs/receipts.md](docs/receipts.md) |
+| Signed delivery receipts (`X-402-Receipt`), binding body and declaration, as SEP-53 Stellar signed messages | Working, tested — [docs/receipts.md](docs/receipts.md) |
 | Scoring method v3 (endpoint and seller scores; breaking one's own declaration is a failed delivery) | Working, tested — [docs/scoring.md](docs/scoring.md) |
 | Attestation registry: bonded attesters, slashing, quorum reads | Working, 10 tests — [docs/attestation-spec.md](docs/attestation-spec.md) |
 | Merkle evidence, verifiable onchain | Working, same test vector in Rust and TypeScript — [docs/evidence.md](docs/evidence.md) |

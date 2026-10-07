@@ -167,3 +167,25 @@ test('observatory decision follows the seller policy on the bound', () => {
   assert.equal(d({ status: 'published', faultRateUpperBound: 0.02, liveness: { outcome: 'gone' } }), 'hold');
   assert.equal(d({ status: 'no_data' }), 'unknown');
 });
+
+import { createHash } from 'node:crypto';
+import { receiptMessage, signReceiptWith, RECEIPT_VERSION_1 } from '../receipts.js';
+test('receipts are SEP-53 signed messages: any Stellar SDK can check them, and v1 still verifies', async () => {
+  const seller = Keypair.random();
+  const r = signReceipt(seller.secret(), { resource: 'https://a.example/x', paymentHeader: 'PAY', body: '{"ok":1}' });
+  assert.equal(r.v, 'x402-receipt/2');
+  // Independent SEP-53 check: ed25519 over sha256("Stellar Signed Message:\n" + message).
+  const digest = createHash('sha256').update(Buffer.concat([Buffer.from('Stellar Signed Message:\n'), receiptMessage(r)])).digest();
+  assert.ok(Keypair.fromPublicKey(r.signer).verify(digest, Buffer.from(r.sig, 'base64')));
+  assert.ok(Keypair.fromPublicKey(r.signer).verifyMessage(receiptMessage(r), Buffer.from(r.sig, 'base64')));
+  // A wallet-style signer that only exposes signMessage gives the same result.
+  const w = await signReceiptWith({ publicKey: seller.publicKey(), signMessage: (m) => seller.signMessage(m).toString('base64') }, { resource: 'https://a.example/x', paymentHeader: 'PAY', body: '{"ok":1}', at: r.at });
+  assert.equal(w.sig, r.sig);
+  assert.equal(verifyReceipt(w, { paymentHeader: 'PAY', body: '{"ok":1}', payTo: seller.publicKey() }), 'valid');
+  // Legacy v1 (raw signature over the message) is still accepted.
+  const base = { resource: 'https://a.example/x', payment: createHash('sha256').update('PAY').digest('hex'), body: createHash('sha256').update('{"ok":1}').digest('hex'), at: 1 };
+  const v1 = { v: RECEIPT_VERSION_1, ...base, signer: seller.publicKey(), sig: seller.sign(receiptMessage({ ...base, v: RECEIPT_VERSION_1 })).toString('base64') } as never;
+  assert.equal(verifyReceipt(v1, { paymentHeader: 'PAY', body: '{"ok":1}', payTo: seller.publicKey() }), 'valid');
+  // A v1 signature relabelled as v2 does not verify.
+  assert.equal(verifyReceipt({ ...(v1 as object), v: 'x402-receipt/2' } as never, { paymentHeader: 'PAY', body: '{"ok":1}', payTo: seller.publicKey() }), 'invalid');
+});

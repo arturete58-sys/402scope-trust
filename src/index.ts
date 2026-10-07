@@ -12,7 +12,7 @@ export {
   deployWasm, deployRegistry, toAttestation, toSellerAttestation, reportHash, latestLedger, DEFAULT_TTL_LEDGERS,
   type ChainConfig, type OnchainAttestation, type OnchainSellerAttestation,
 } from './chain.js';
-export { signReceipt, verifyReceipt, decodeReceipt, encodeReceipt, deliveryReceipts, RECEIPT_HEADER, type Receipt, type ReceiptCheck } from './receipts.js';
+export { signReceipt, signReceiptWith, receiptMessage, RECEIPT_VERSION, RECEIPT_VERSION_1, verifyReceipt, decodeReceipt, encodeReceipt, deliveryReceipts, RECEIPT_HEADER, type Receipt, type ReceiptCheck } from './receipts.js';
 export { evidenceLeaf, evidenceTree, buildTree, proofFor, verifyProof, type MerkleTree } from './evidence.js';
 export { sellerScores, type SellerScore } from './seller.js';
 export { type OnchainView } from './check.js';

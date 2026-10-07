@@ -1,4 +1,4 @@
-# Delivery receipts (`x402-receipt/1`)
+# Delivery receipts (`x402-receipt/2`, SEP-53)
 
 x402 proves that a buyer paid. It does not prove what the seller delivered for that payment. A delivery receipt is the seller's signed statement: *for this payment, at this URL, I returned exactly this body.*
 
@@ -14,7 +14,7 @@ X-402-Receipt: <base64url(JSON)>
 
 ```json
 {
-  "v": "x402-receipt/1",
+  "v": "x402-receipt/2",
   "resource": "https://api.example.com/paid-data",
   "payment": "<hex sha256 of the PAYMENT-SIGNATURE request header>",
   "body": "<hex sha256 of the response body bytes>",
@@ -25,13 +25,17 @@ X-402-Receipt: <base64url(JSON)>
 }
 ```
 
-The signed message is the UTF-8 string
+The message is the UTF-8 string
 
 ```
-x402-receipt/1\n<resource>\n<payment>\n<body>\n<at>
+x402-receipt/2\n<resource>\n<payment>\n<body>\n<at>
 ```
 
-followed by `\n<decl>` when the response carried a [declaration](declarations.md), signed with the ed25519 key of `signer`. A receipt then binds what the seller stated about the response (its age, source...) as well as the body.
+followed by `\n<decl>` when the response carried a [declaration](declarations.md). A receipt then binds what the seller stated about the response (its age, source...) as well as the body.
+
+It is signed as a **[SEP-53](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0053.md) Stellar signed message**: an ed25519 signature by `signer` over `sha256("Stellar Signed Message:\n" + message)`. Any Stellar wallet or SDK that implements SEP-53 can produce or check it (`Keypair.signMessage` / `Keypair.verifyMessage` in `@stellar/stellar-sdk`), and a seller can sign from a wallet that never hands over its secret key (`signReceiptWith`). The SEP-53 prefix also means a receipt signature can never be mistaken for a transaction signature.
+
+Receipts in the earlier `x402-receipt/1` format (raw ed25519 over the message) are still verified.
 
 ## Verification
 
@@ -48,7 +52,7 @@ Only `valid` receipts count. Binding the receipt to the hash of `PAYMENT-SIGNATU
 
 ## Relation to the x402 offer-receipt extension
 
-x402 has an official `offer-receipt` extension: a signed receipt that a payment was received for a resource (payer, network, resource, time, optionally the transaction). It does not cover the content. `x402-receipt/1` covers what was delivered: the body hash and the declaration, bound to the exact payment. The two are complementary; a seller can send both.
+x402 has an official `offer-receipt` extension: a signed receipt that a payment was received for a resource (payer, network, resource, time, optionally the transaction). It does not cover the content. `x402-receipt/2` covers what was delivered: the body hash and the declaration, bound to the exact payment. The two are complementary; a seller can send both.
 
 ## For sellers
 

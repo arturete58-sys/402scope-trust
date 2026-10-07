@@ -4,7 +4,8 @@ import type { NextFunction, Request, Response } from 'express';
 import { DECLARATION_HEADER } from './declarations.js';
 
 /**
- * x402 delivery receipts on Stellar (draft extension "x402-receipt/1").
+ * x402 delivery receipts on Stellar (draft extension "x402-receipt/2", signed
+ * as SEP-53 Stellar signed messages; "x402-receipt/1" is still verified).
  *
  * After a paid request, the seller signs what it delivered with the key of
  * its payment address, binding together: the resource, the payment (hash of
@@ -19,10 +20,13 @@ import { DECLARATION_HEADER } from './declarations.js';
  * Header: `X-402-Receipt: base64url(JSON)`. See docs/receipts.md.
  */
 export const RECEIPT_HEADER = 'X-402-Receipt';
-export const RECEIPT_VERSION = 'x402-receipt/1';
+/** Current version: signed as a SEP-53 Stellar signed message. */
+export const RECEIPT_VERSION = 'x402-receipt/2';
+/** Legacy version: raw ed25519 over the message. Still verified. */
+export const RECEIPT_VERSION_1 = 'x402-receipt/1';
 
 export interface Receipt {
-  v: typeof RECEIPT_VERSION;
+  v: typeof RECEIPT_VERSION | typeof RECEIPT_VERSION_1;
   /** Resource URL as the seller served it. */
   resource: string;
   /** sha256 (hex) of the PAYMENT-SIGNATURE header value the buyer sent. */
@@ -35,7 +39,12 @@ export interface Receipt {
   decl?: string;
   /** Stellar public key (G...) that signed: normally the seller's payTo. */
   signer: string;
-  /** base64 ed25519 signature over `receiptMessage(...)`. */
+  /**
+   * base64 ed25519 signature. v2: SEP-53, i.e. over
+   * sha256("Stellar Signed Message:\n" + receiptMessage(...)), so any Stellar
+   * wallet or SDK that implements SEP-53 can produce and check it.
+   * v1: raw over receiptMessage(...).
+   */
   sig: string;
 }
 
@@ -43,15 +52,31 @@ export type ReceiptCheck = 'valid' | 'unbound' | 'invalid' | 'missing';
 
 export const sha256hex = (b: Uint8Array | string) => createHash('sha256').update(b).digest('hex');
 
-/** The exact bytes that are signed. */
-export function receiptMessage(r: Pick<Receipt, 'resource' | 'payment' | 'body' | 'at' | 'decl'>): Buffer {
-  return Buffer.from(`${RECEIPT_VERSION}\n${r.resource}\n${r.payment}\n${r.body}\n${r.at}${r.decl ? `\n${r.decl}` : ''}`, 'utf8');
+/** The message that is signed (for v2, the SEP-53 message). */
+export function receiptMessage(r: Pick<Receipt, 'resource' | 'payment' | 'body' | 'at' | 'decl'> & { v?: Receipt['v'] }): Buffer {
+  return Buffer.from(`${r.v ?? RECEIPT_VERSION}\n${r.resource}\n${r.payment}\n${r.body}\n${r.at}${r.decl ? `\n${r.decl}` : ''}`, 'utf8');
+}
+
+type ReceiptBase = Pick<Receipt, 'resource' | 'payment' | 'body' | 'at' | 'decl'>;
+function receiptBase(p: { resource: string; paymentHeader: string; body: Uint8Array | string; at?: number; declaration?: string | null }): ReceiptBase {
+  return { resource: p.resource, payment: sha256hex(p.paymentHeader), body: sha256hex(p.body), at: p.at ?? Math.floor(Date.now() / 1000), ...(p.declaration ? { decl: sha256hex(p.declaration) } : {}) };
+}
+
+/**
+ * Signs with any SEP-53 signer, for example a wallet that never hands over
+ * its secret key: `signMessage(message)` returns the base64 (or raw) signature.
+ */
+export async function signReceiptWith(signer: { publicKey: string; signMessage: (message: string) => Promise<string | Uint8Array> | string | Uint8Array }, p: { resource: string; paymentHeader: string; body: Uint8Array | string; at?: number; declaration?: string | null }): Promise<Receipt> {
+  const base = receiptBase(p);
+  const sig = await signer.signMessage(receiptMessage({ ...base, v: RECEIPT_VERSION }).toString('utf8'));
+  return { v: RECEIPT_VERSION, ...base, signer: signer.publicKey, sig: typeof sig === 'string' ? sig : Buffer.from(sig).toString('base64') };
 }
 
 export function signReceipt(secret: string, p: { resource: string; paymentHeader: string; body: Uint8Array | string; at?: number; declaration?: string | null }): Receipt {
   const kp = Keypair.fromSecret(secret);
-  const base = { resource: p.resource, payment: sha256hex(p.paymentHeader), body: sha256hex(p.body), at: p.at ?? Math.floor(Date.now() / 1000), ...(p.declaration ? { decl: sha256hex(p.declaration) } : {}) };
-  return { v: RECEIPT_VERSION, ...base, signer: kp.publicKey(), sig: kp.sign(receiptMessage(base)).toString('base64') };
+  const base = receiptBase(p);
+  // SEP-53: Keypair.signMessage prefixes "Stellar Signed Message:\n" and signs the sha256.
+  return { v: RECEIPT_VERSION, ...base, signer: kp.publicKey(), sig: kp.signMessage(receiptMessage({ ...base, v: RECEIPT_VERSION })).toString('base64') };
 }
 
 export const encodeReceipt = (r: Receipt) => Buffer.from(JSON.stringify(r)).toString('base64url');
@@ -60,7 +85,7 @@ export function decodeReceipt(header: string | null | undefined): Receipt | null
   if (!header) return null;
   try {
     const r = JSON.parse(Buffer.from(header, 'base64url').toString('utf8'));
-    return r && r.v === RECEIPT_VERSION ? (r as Receipt) : null;
+    return r && (r.v === RECEIPT_VERSION || r.v === RECEIPT_VERSION_1) ? (r as Receipt) : null;
   } catch {
     return null;
   }
@@ -79,7 +104,9 @@ export function verifyReceipt(r: Receipt | null, expect: { paymentHeader: string
     if (r.payment !== sha256hex(expect.paymentHeader) || r.body !== sha256hex(expect.body)) return 'invalid';
     // A declaration received must be the one signed, and a signed one must have been received.
     if ((r.decl ?? null) !== (expect.declaration ? sha256hex(expect.declaration) : null)) return 'invalid';
-    const ok = Keypair.fromPublicKey(r.signer).verify(receiptMessage(r), Buffer.from(r.sig, 'base64'));
+    const kp = Keypair.fromPublicKey(r.signer);
+    const sig = Buffer.from(r.sig, 'base64');
+    const ok = r.v === RECEIPT_VERSION_1 ? kp.verify(receiptMessage(r), sig) : kp.verifyMessage(receiptMessage(r), sig);
     if (!ok) return 'invalid';
     return expect.payTo && expect.payTo === r.signer ? 'valid' : 'unbound';
   } catch {
