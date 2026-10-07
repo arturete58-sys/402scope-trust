@@ -3,11 +3,11 @@ use super::*;
 use ed25519_dalek::{Signer as Ed25519Signer, SigningKey};
 use scope_attestations::{Attestations, AttestationsClient, SellerAttestation};
 use scope_ed25519_verifier::Ed25519Verifier;
-use scope_spending_limit::{SpendingLimitAccountParams, SpendingLimitPolicy, SpendingLimitPolicyClient};
+use scope_spending_limit::{SpendingLimitParams, SpendingLimitPolicy, SpendingLimitPolicyClient};
 use scope_trust_policy::{TrustPolicy, TrustPolicyParams};
 use soroban_sdk::{
     map,
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events as _, Ledger},
     token::{StellarAssetClient, TokenClient},
     vec,
     xdr::{
@@ -92,7 +92,7 @@ fn world() -> World {
     let key = SigningKey::from_bytes(&[42u8; 32]);
     let signer = Signer::External(e.register(Ed25519Verifier, ()), Bytes::from_array(&e, key.verifying_key().as_bytes()));
     let trust_params = TrustPolicyParams { registry: registry.address.clone(), attesters: vec![&e, a1, a2], min_score: 80, quorum: 2, max_unverified: 0 };
-    let limit_params = SpendingLimitAccountParams { spending_limit: LIMIT, period_ledgers: PERIOD };
+    let limit_params = SpendingLimitParams { spending_limit: LIMIT, period_ledgers: PERIOD };
     let policies: Map<Address, Val> = map![&e, (trust, trust_params.into_val(&e)), (limit.address.clone(), limit_params.into_val(&e))];
     let owner = Signer::Delegated(Address::generate(&e));
     let wallet = e.register(AgentWallet, (vec![&e, signer.clone()], policies, Some(token.clone()), vec![&e, owner]));
@@ -150,8 +150,9 @@ fn pays_trusted_sellers_up_to_the_limit_then_refuses() {
     assert!(!pay(&w, &w.token, &w.good, 100));
     assert!(pay(&w, &w.token, &w.good, 50));
     assert_eq!(TokenClient::new(&w.e, &w.token).balance(&w.good), 250);
-    let data = w.limit.get_spending_limit_data(&0, &w.wallet);
-    assert_eq!(data.cached_total_spent, 250);
+    let window = w.limit.window(&w.wallet, &0).unwrap();
+    assert_eq!(window.spent, 250);
+    assert_eq!(w.limit.remaining(&w.wallet, &0), 0);
 }
 
 #[test]
@@ -161,6 +162,24 @@ fn the_window_rolls() {
     assert!(!pay(&w, &w.token, &w.good, 1));
     w.e.ledger().set_sequence_number(10 + PERIOD + 1);
     assert!(pay(&w, &w.token, &w.good, 250));
+    assert_eq!(w.limit.remaining(&w.wallet, &0), 0);
+}
+
+/// The x402 facilitator for Stellar accepts a payment only if its simulation
+/// emits exactly one event, the token transfer. Neither policy may emit one.
+#[test]
+fn a_payment_emits_only_the_transfer_event() {
+    let w = world();
+    assert!(pay(&w, &w.token, &w.good, 100));
+    let events = w.e.events().all();
+    let std_events = events.events();
+    assert_eq!(std_events.len(), 1, "events: {:?}", std_events);
+    let ev = &std_events[0];
+    let expected: soroban_sdk::xdr::ScAddress = (&w.token).try_into().unwrap();
+    match expected {
+        soroban_sdk::xdr::ScAddress::Contract(id) => assert_eq!(ev.contract_id.as_ref(), Some(&id)),
+        _ => panic!("token is a contract"),
+    }
 }
 
 #[test]

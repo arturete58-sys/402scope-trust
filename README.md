@@ -30,7 +30,7 @@ Part of the [402Scope observatory](https://402scope.org).
 | Merkle evidence, verifiable onchain | Working, same test vector in Rust and TypeScript — [docs/evidence.md](docs/evidence.md) |
 | Trust policy for OpenZeppelin smart accounts | Working, 8 end-to-end tests — [docs/agent-wallet.md](docs/agent-wallet.md) |
 | Agent wallet paying over x402 (`AgentWalletExactScheme`) | Working on testnet with a standard facilitator |
-| Who and how much: trust policy plus OpenZeppelin's spending limit on the same wallet | Working, 6 end-to-end tests, proven on testnet — [docs/agent-wallet.md](docs/agent-wallet.md#who-and-how-much-trust-policy-plus-spending-limit) |
+| Who and how much: trust policy plus a spending limit on the same wallet (OpenZeppelin semantics, x402-compatible) | Working, 7 end-to-end tests — [docs/agent-wallet.md](docs/agent-wallet.md#who-and-how-much-trust-policy-plus-spending-limit) |
 | Typed TypeScript clients for every contract, generated from the deployed wasm | Working — `import { clients } from '402scope-trust'`, [src/clients](src/clients) |
 | Any facilitator: trust hooks for `@x402/core` facilitators (flag or block), ranked Bazaar discovery, `/v1/sellers` API | Working, tested — [docs/facilitators.md](docs/facilitators.md) |
 | Off-chain trust guard for classic accounts, MCP server, read API | Working, tested |

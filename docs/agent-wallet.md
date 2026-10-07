@@ -17,7 +17,7 @@ agent → x402 client → wallet signs transfer(from, to, amount)
 | Contract | What it is |
 | --- | --- |
 | `contracts/agent-wallet` | An OpenZeppelin smart account (`stellar-accounts`), deployed with the agent's signer and its policies on one context rule (see [shapes](#two-shapes)) |
-| `contracts/spending-limit` | OpenZeppelin's audited `spending_limit` policy as its own contract: at most an amount in any rolling window of ledgers |
+| `contracts/spending-limit` | Spending limit policy: at most an amount in any rolling window of ledgers. OpenZeppelin's semantics and parameters, compatible with x402 facilitators (see below) |
 | `contracts/trust-policy` | An OpenZeppelin `Policy`. Installed per smart account and context rule, with its own parameters |
 | `contracts/ed25519-verifier` | OpenZeppelin `Verifier` for ed25519 keys, so the agent's key is an `External` signer |
 | `contracts/attestations` | The [registry](attestation-spec.md) the policy reads |
@@ -46,17 +46,23 @@ Unknown or unparsable destinations are treated as untrusted (fail closed). Read-
 
 ## Who and how much: trust policy plus spending limit
 
-The trust policy decides *who* the agent may pay. OpenZeppelin's spending limit decides *how much*: at most `spending_limit` in any rolling window of `period_ledgers` (17,280 ledgers is about a day). Installed on the same rule, both run on every payment inside `__check_auth`, independently of each other, and either one can refuse it.
+The trust policy decides *who* the agent may pay. The spending limit decides *how much*: at most `spending_limit` in any rolling window of `period_ledgers` (17,280 ledgers is about a day). Installed on the same rule, both run on every payment inside `__check_auth`, independently of each other, and either one can refuse it.
 
 ```rust
-SpendingLimitAccountParams { spending_limit: i128, period_ledgers: u32 }
+SpendingLimitParams { spending_limit: i128, period_ledgers: u32 }
 ```
 
-A refused payment (untrusted seller) does not use up the budget. Reads: `get_spending_limit_data(rule, account)` returns the limit, the window and what was spent in it; the wallet can change the limit with `set_spending_limit`.
+A refused payment (untrusted seller) does not use up the budget. Reads: `window(account, rule)` returns the limit, the payments still in the window and their total; `remaining(account, rule)` what is left. The wallet can change the limit with `set_spending_limit`. Errors: `LimitExceeded` (#3302), `NotAllowed` (#3304, anything but a token transfer).
+
+### Why not OpenZeppelin's spending limit as it is
+
+OpenZeppelin's `spending_limit` policy has the same rolling window and parameters, and we first deployed it unchanged. On testnet every payment from that wallet was refused by the facilitator, not by the wallet: the x402 `exact` facilitator for Stellar (`@x402/stellar`) simulates the payment and accepts it only if the simulation emits exactly one event, the token transfer. OpenZeppelin's policy emits `SpendingLimitEnforced` on every payment, so the facilitator answers `invalid_exact_stellar_payload_event_not_transfer`.
+
+`scope-spending-limit` keeps OpenZeppelin's semantics and emits no event when it lets a payment through (installing or changing a limit still does). The trust policy emits none either. The test `a_payment_emits_only_the_transfer_event` holds both policies to it.
 
 ### Two shapes
 
-The OpenZeppelin spending limit only accepts rules scoped to one contract, so the wallet constructor takes the token:
+A spending limit only accepts rules scoped to one token contract (amounts of different tokens are never added together), so the wallet constructor takes the token:
 
 ```rust
 __constructor(signers: Vec<Signer>, policies: Map<Address, Val>, token: Option<Address>, admins: Vec<Signer>)
@@ -102,4 +108,4 @@ Smart-account authorization plus the policy's cross-contract call to the registr
 
 In the [latest run](testnet/README.md) the wallet paid the good seller (trusted by 2 of 2 attesters at score ≥ 80) and refused the broken and wrong-content-type endpoints of the bad seller inside its own `__check_auth`. A second, budgeted wallet (trust policy plus a spending limit of 2.5 calls a day) paid the good seller twice, was refused the third call by the spending limit, and was refused the bad seller by the trust policy.
 
-Tests: `cargo test -p scope-trust-policy` runs the policy end to end with a real OpenZeppelin smart account, an ed25519 signer and token transfers. `cargo test -p scope-agent-wallet` runs the deployed wallet with both policies: payments up to the limit, the rolling window, untrusted sellers refused within the budget, and the agent key unable to move any other token.
+Tests: `cargo test -p scope-trust-policy` runs the policy end to end with a real OpenZeppelin smart account, an ed25519 signer and token transfers. `cargo test -p scope-agent-wallet` runs the deployed wallet with both policies: payments up to the limit, the rolling window, untrusted sellers refused within the budget, the agent key unable to move any other token, and a payment emitting only the transfer event.

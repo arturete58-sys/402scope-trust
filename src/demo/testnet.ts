@@ -133,7 +133,7 @@ async function main(): Promise<void> {
   const walletHash = await uploadWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_agent_wallet') });
   const wallet = await deployAgentWallet({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, walletWasmHash: walletHash, verifier, signerKey: agentKey, policy, params: policyParams });
   await submit(server, PASS, k.issuer, Operation.invokeContractFunction({ contract: token, function: 'mint', args: [new Address(wallet).toScVal(), nativeToScVal(10n * UNIT, { type: 'i128' })] }));
-  // A second wallet with a budget: the trust policy decides who, OpenZeppelin's spending limit how much.
+  // A second wallet with a budget: the trust policy decides who, the spending limit how much.
   log('deploying a budgeted agent wallet (trust policy + spending limit)');
   const limitPolicy = await deployWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_spending_limit'), args: null });
   const budget = { spendingLimit: BUDGET, periodLedgers: 17_280 };
@@ -297,10 +297,10 @@ async function main(): Promise<void> {
       const r = await budgeted(`${base}/${name}`);
       const settle = r.headers.get('PAYMENT-RESPONSE');
       const txh = settle ? JSON.parse(Buffer.from(settle, 'base64').toString()).transaction : null;
-      budgetPayments.push({ endpoint: `/${name}`, outcome: r.ok ? 'paid' : `HTTP ${r.status}`, tx: txh ? txUrl(txh) : null });
+      budgetPayments.push({ endpoint: `/${name}`, outcome: r.ok ? 'paid' : `HTTP ${r.status}`, tx: txh ? txUrl(txh) : null, reason: r.ok ? undefined : (await r.text()).slice(0, 300), facilitator: r.ok ? undefined : verifyLog.at(-1) });
     } catch (e) {
       const msg = (e as Error).message;
-      const why = /#3221\b|SpendingLimitExceeded/.test(msg) ? 'over the spending limit' : /#1\b|NotTrusted/.test(msg) ? 'seller not trusted' : 'refused';
+      const why = /#3302\b|LimitExceeded/.test(msg) ? 'over the spending limit' : /#1\b|NotTrusted/.test(msg) ? 'seller not trusted' : 'refused';
       budgetPayments.push({ endpoint: `/${name}`, outcome: `refused by the wallet: ${why}`, reason: msg.slice(0, 300) });
     }
     log(`budgeted wallet /${name}: ${budgetPayments.at(-1)!.outcome}`);
