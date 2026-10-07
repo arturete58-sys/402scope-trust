@@ -1383,6 +1383,11 @@ dependencies = [
 name = "scope-agent-wallet"
 version = "0.2.0"
 dependencies = [
+ "ed25519-dalek",
+ "scope-attestations",
+ "scope-ed25519-verifier",
+ "scope-spending-limit",
+ "scope-trust-policy",
  "soroban-sdk",
  "stellar-accounts",
 ]
@@ -1396,6 +1401,14 @@ dependencies = [
 
 [[package]]
 name = "scope-ed25519-verifier"
+version = "0.2.0"
+dependencies = [
+ "soroban-sdk",
+ "stellar-accounts",
+]
+
+[[package]]
+name = "scope-spending-limit"
 version = "0.2.0"
 dependencies = [
  "soroban-sdk",

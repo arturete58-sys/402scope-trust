@@ -13,7 +13,11 @@ on:
         default: '5'
   push:
     branches: [main]
-    paths: ['src/**', 'contracts/*/src/**', 'contracts/Cargo.toml', '.github/workflows/testnet-demo.yml']
+    paths: ['src/**', 'contracts/*/src/**', 'contracts/*/Cargo.toml', 'contracts/Cargo.toml', 'scripts/gen-clients.mjs', '.github/workflows/testnet-demo.yml']
+  # Daily, so the onchain feed at 402scope.org/live always has recent events
+  # (testnet is also reset from time to time).
+  schedule:
+    - cron: '17 5 * * *'
 
 concurrency:
   group: testnet-demo
@@ -55,6 +59,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Typed contract clients
+        # Generated from the wasm this run deploys (Stellar JS SDK binding generator),
+        # compiled by the next step and committed with the results.
+        run: bash scripts/run-and-annotate.sh "typed clients" node scripts/gen-clients.mjs contracts/target/wasm32v1-none/release
       - run: npm run build
       - name: Run the testnet demo
         run: bash scripts/run-and-annotate.sh "testnet demo" node dist/demo/testnet.js --wasm-dir contracts/target/wasm32v1-none/release --calls "${{ github.event.inputs.calls || '5' }}" --out demo-result.json
@@ -73,8 +81,8 @@ jobs:
           node scripts/demo-report.mjs demo-result.json > docs/testnet/README.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/testnet
-          git commit -q -m "Testnet demo results" || exit 0
+          git add docs/testnet src/clients
+          git commit -q -m "Testnet demo results and typed contract clients" || exit 0
           # Logs are not readable from outside; failures are reported as annotations.
           out=$( { git pull --rebase origin main && git push origin HEAD:main; } 2>&1 ) || { echo "::error title=publish::$(echo "$out" | tr '\n' ' ' | cut -c1-900)"; exit 1; }
       - uses: actions/upload-artifact@v4

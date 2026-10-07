@@ -63,6 +63,7 @@ const NETWORK = 'stellar:testnet' as const;
 const PASS = Networks.TESTNET;
 const RPC = process.env.STELLAR_RPC_URL ?? TESTNET_RPC;
 const PRICE = '10000'; // 0.001 SCOPE (7 decimals)
+const BUDGET = 25_000n; // the budgeted wallet may spend 0.0025 SCOPE a day: two calls, not three
 const UNIT = 10_000_000n; // 1 SCOPE
 const txUrl = (h: string) => `https://stellar.expert/explorer/testnet/tx/${h}`;
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -132,8 +133,14 @@ async function main(): Promise<void> {
   const walletHash = await uploadWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_agent_wallet') });
   const wallet = await deployAgentWallet({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, walletWasmHash: walletHash, verifier, signerKey: agentKey, policy, params: policyParams });
   await submit(server, PASS, k.issuer, Operation.invokeContractFunction({ contract: token, function: 'mint', args: [new Address(wallet).toScVal(), nativeToScVal(10n * UNIT, { type: 'i128' })] }));
+  // A second wallet with a budget: the trust policy decides who, OpenZeppelin's spending limit how much.
+  log('deploying a budgeted agent wallet (trust policy + spending limit)');
+  const limitPolicy = await deployWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_spending_limit'), args: null });
+  const budget = { spendingLimit: BUDGET, periodLedgers: 17_280 };
+  const budgetWallet = await deployAgentWallet({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, walletWasmHash: walletHash, verifier, signerKey: agentKey, policy, params: policyParams, token, spendingLimit: { policy: limitPolicy, ...budget } });
+  await submit(server, PASS, k.issuer, Operation.invokeContractFunction({ contract: token, function: 'mint', args: [new Address(budgetWallet).toScVal(), nativeToScVal(10n * UNIT, { type: 'i128' })] }));
   const c = (id: string) => `https://stellar.expert/explorer/testnet/contract/${id}`;
-  out.contracts = { registry, policy, verifier, wallet, token, links: { registry: c(registry), policy: c(policy), wallet: c(wallet), token: c(token) } };
+  out.contracts = { registry, policy, verifier, wallet, token, spendingLimit: limitPolicy, budgetWallet, links: { registry: c(registry), policy: c(policy), wallet: c(wallet), token: c(token), spendingLimit: c(limitPolicy), budgetWallet: c(budgetWallet) } };
   out.policy = { attesters, minScore: 80, quorum: 2, maxUnverified: '0' };
   log('registry', registry, 'policy', policy, 'wallet', wallet);
 
@@ -279,6 +286,27 @@ async function main(): Promise<void> {
   }
   out.walletPayments = walletPayments;
 
+  // 6b. The budgeted wallet: same trust policy, plus a spending limit. Trusted seller, three calls in a row.
+  const budgeted = wrapFetchWithPayment(fetch, x402Client.fromConfig({
+    schemes: [{ network: 'stellar:*', client: new AgentWalletExactScheme({ account: budgetWallet, key: agentKey, verifier, contextRuleId: 0 }, { url: RPC }) }],
+    spendControls: false,
+  }));
+  const budgetPayments: Record<string, unknown>[] = [];
+  for (const name of ['good', 'good', 'good', 'broken']) {
+    try {
+      const r = await budgeted(`${base}/${name}`);
+      const settle = r.headers.get('PAYMENT-RESPONSE');
+      const txh = settle ? JSON.parse(Buffer.from(settle, 'base64').toString()).transaction : null;
+      budgetPayments.push({ endpoint: `/${name}`, outcome: r.ok ? 'paid' : `HTTP ${r.status}`, tx: txh ? txUrl(txh) : null });
+    } catch (e) {
+      const msg = (e as Error).message;
+      const why = /#3221\b|SpendingLimitExceeded/.test(msg) ? 'over the spending limit' : /#1\b|NotTrusted/.test(msg) ? 'seller not trusted' : 'refused';
+      budgetPayments.push({ endpoint: `/${name}`, outcome: `refused by the wallet: ${why}`, reason: msg.slice(0, 300) });
+    }
+    log(`budgeted wallet /${name}: ${budgetPayments.at(-1)!.outcome}`);
+  }
+  out.budgetWallet = { wallet: budgetWallet, price: PRICE, limit: BUDGET.toString(), periodLedgers: budget.periodLedgers, payments: budgetPayments };
+
   // check_before_pay with the onchain quorum, and the off-chain guard for classic accounts
   out.checks = [];
   for (const name of names) {
@@ -333,8 +361,11 @@ async function main(): Promise<void> {
   const goodPaid = walletPayments[0]?.outcome === 'paid';
   const badRefused = walletPayments.slice(1).every((p) => String(p.outcome).startsWith('refused'));
   const facOk = facilitatorPayments[0]?.outcome === 'paid' && facilitatorPayments[1]?.outcome !== 'paid';
-  if (!goodPaid || !badRefused || !facOk || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
-    throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused} facilitatorHooks=${facOk}`);
+  const o = budgetPayments.map((p) => String(p.outcome));
+  const budgetOk = o[0] === 'paid' && o[1] === 'paid' && o[2] === 'refused by the wallet: over the spending limit' && o[3].startsWith('refused');
+  if (!budgetOk) log('budgeted wallet expectations not met', o);
+  if (!goodPaid || !badRefused || !facOk || !budgetOk || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
+    throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused} facilitatorHooks=${facOk} budget=${o.join(',')}`);
   }
 }
 

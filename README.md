@@ -30,6 +30,8 @@ Part of the [402Scope observatory](https://402scope.org).
 | Merkle evidence, verifiable onchain | Working, same test vector in Rust and TypeScript — [docs/evidence.md](docs/evidence.md) |
 | Trust policy for OpenZeppelin smart accounts | Working, 8 end-to-end tests — [docs/agent-wallet.md](docs/agent-wallet.md) |
 | Agent wallet paying over x402 (`AgentWalletExactScheme`) | Working on testnet with a standard facilitator |
+| Who and how much: trust policy plus OpenZeppelin's spending limit on the same wallet | Working, 6 end-to-end tests, proven on testnet — [docs/agent-wallet.md](docs/agent-wallet.md#who-and-how-much-trust-policy-plus-spending-limit) |
+| Typed TypeScript clients for every contract, generated from the deployed wasm | Working — `import { clients } from '402scope-trust'`, [src/clients](src/clients) |
 | Any facilitator: trust hooks for `@x402/core` facilitators (flag or block), ranked Bazaar discovery, `/v1/sellers` API | Working, tested — [docs/facilitators.md](docs/facilitators.md) |
 | Off-chain trust guard for classic accounts, MCP server, read API | Working, tested |
 | Bazaar and `/.well-known/x402` discovery | Working |
@@ -53,6 +55,24 @@ node dist/cli.js probe https://api.example.com/paid-data
 # The agent's question: should I pay this?
 node dist/cli.js check https://api.example.com/paid-data --min 80
 ```
+
+### Typed contract clients
+
+Every contract ships with a typed client, generated from the exact wasm the testnet demo deploys (Stellar JS SDK binding generator, `scripts/gen-clients.mjs`):
+
+```ts
+import { Networks } from '@stellar/stellar-sdk';
+import { clients } from '402scope-trust';
+
+const registry = new clients.attestations.Client({
+  contractId: 'C…', // see docs/testnet/latest.json for the current testnet deployment
+  rpcUrl: 'https://soroban-testnet.stellar.org',
+  networkPassphrase: Networks.TESTNET,
+});
+const { result } = await registry.trusted_by({ seller: 'G…', attesters: ['G…', 'G…'], min_score: 80, quorum: 2 });
+```
+
+Clients: `attestations`, `trustPolicy`, `agentWallet`, `spendingLimit`, `ed25519Verifier`. Each exports its contract's types and the sha256 of the wasm it was generated from (`WASM_SHA256`).
 
 ### Use it from an agent (MCP)
 

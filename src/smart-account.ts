@@ -114,7 +114,32 @@ export function trustPolicyParams(p: TrustPolicyParams): xdr.ScVal {
   });
 }
 
-/** Deploys an agent wallet (already uploaded wasm) with one External signer and the trust policy. */
+export interface SpendingLimitParams {
+  /** Most the wallet may pay in any window of `periodLedgers` (token base units). */
+  spendingLimit: bigint;
+  /** Window length in ledgers (17,280 is about a day). */
+  periodLedgers: number;
+}
+
+/** Install parameters of the spending limit policy (OpenZeppelin `SpendingLimitAccountParams`). */
+export function spendingLimitParams(p: SpendingLimitParams): xdr.ScVal {
+  return struct({ spending_limit: nativeToScVal(p.spendingLimit, { type: 'i128' }), period_ledgers: xdr.ScVal.scvU32(p.periodLedgers) });
+}
+
+/** A Soroban map needs its keys in order; for addresses of one kind that is the order of their XDR. */
+function policyMap(entries: [string, xdr.ScVal][]): xdr.ScVal {
+  const items = entries.map(([a, v]) => ({ key: new Address(a).toScVal(), val: v }));
+  items.sort((x, y) => Buffer.compare(x.key.toXDR(), y.key.toXDR()));
+  return xdr.ScVal.scvMap(items.map((i) => new xdr.ScMapEntry(i)));
+}
+
+/**
+ * Deploys an agent wallet (already uploaded wasm) with one External signer
+ * and the trust policy. With `spendingLimit` (which needs `token`), the
+ * spending limit policy is installed on the same rule, and the agent's rule
+ * covers payments in that token only: the agent key can pay trusted sellers,
+ * up to the limit, and do nothing else. `admins` get a separate rule to manage the wallet.
+ */
 export async function deployAgentWallet(o: {
   rpcUrl: string;
   networkPassphrase: string;
@@ -124,15 +149,21 @@ export async function deployAgentWallet(o: {
   signerKey: Keypair;
   policy: string;
   params: TrustPolicyParams;
+  token?: string;
+  spendingLimit?: { policy: string } & SpendingLimitParams;
+  admins?: xdr.ScVal[];
 }): Promise<string> {
+  if (o.spendingLimit && !o.token) throw new Error('a spending limit needs the wallet scoped to a token');
   const server = new rpc.Server(o.rpcUrl);
   const signers = xdr.ScVal.scvVec([externalSigner(o.verifier, o.signerKey.rawPublicKey())]);
-  const policies = xdr.ScVal.scvMap([new xdr.ScMapEntry({ key: new Address(o.policy).toScVal(), val: trustPolicyParams(o.params) })]);
+  const entries: [string, xdr.ScVal][] = [[o.policy, trustPolicyParams(o.params)]];
+  if (o.spendingLimit) entries.push([o.spendingLimit.policy, spendingLimitParams(o.spendingLimit)]);
+  const token = o.token ? new Address(o.token).toScVal() : xdr.ScVal.scvVoid();
   const done = await submit(server, o.networkPassphrase, o.deployer, Operation.createCustomContract({
     address: new Address(o.deployer.publicKey()),
     wasmHash: o.walletWasmHash,
     salt: randomBytes(32),
-    constructorArgs: [signers, policies],
+    constructorArgs: [signers, policyMap(entries), token, xdr.ScVal.scvVec(o.admins ?? [])],
   }));
   return scValToNative(done.returnValue as xdr.ScVal) as string;
 }

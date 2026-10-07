@@ -16,7 +16,8 @@ agent → x402 client → wallet signs transfer(from, to, amount)
 
 | Contract | What it is |
 | --- | --- |
-| `contracts/agent-wallet` | An OpenZeppelin smart account (`stellar-accounts`), deployed with one context rule ("agent") holding the agent's signer and the trust policy |
+| `contracts/agent-wallet` | An OpenZeppelin smart account (`stellar-accounts`), deployed with the agent's signer and its policies on one context rule (see [shapes](#two-shapes)) |
+| `contracts/spending-limit` | OpenZeppelin's audited `spending_limit` policy as its own contract: at most an amount in any rolling window of ledgers |
 | `contracts/trust-policy` | An OpenZeppelin `Policy`. Installed per smart account and context rule, with its own parameters |
 | `contracts/ed25519-verifier` | OpenZeppelin `Verifier` for ed25519 keys, so the agent's key is an `External` signer |
 | `contracts/attestations` | The [registry](attestation-spec.md) the policy reads |
@@ -41,7 +42,41 @@ TrustPolicyParams {
 
 Unknown or unparsable destinations are treated as untrusted (fail closed). Read-only helpers: `params(account, rule)`, `would_allow(account, rule, to, amount)`. The account can change its parameters with `set_params`.
 
-`max_unverified` is a per-payment limit, not a budget. Combine it with OpenZeppelin's spending-limit policy on the same rule to cap the total.
+`max_unverified` is a per-payment limit, not a budget. For a budget, add the spending limit policy to the same rule (below).
+
+## Who and how much: trust policy plus spending limit
+
+The trust policy decides *who* the agent may pay. OpenZeppelin's spending limit decides *how much*: at most `spending_limit` in any rolling window of `period_ledgers` (17,280 ledgers is about a day). Installed on the same rule, both run on every payment inside `__check_auth`, independently of each other, and either one can refuse it.
+
+```rust
+SpendingLimitAccountParams { spending_limit: i128, period_ledgers: u32 }
+```
+
+A refused payment (untrusted seller) does not use up the budget. Reads: `get_spending_limit_data(rule, account)` returns the limit, the window and what was spent in it; the wallet can change the limit with `set_spending_limit`.
+
+### Two shapes
+
+The OpenZeppelin spending limit only accepts rules scoped to one contract, so the wallet constructor takes the token:
+
+```rust
+__constructor(signers: Vec<Signer>, policies: Map<Address, Val>, token: Option<Address>, admins: Vec<Signer>)
+```
+
+| `token` | Rule 0 | Rule 1 |
+| --- | --- | --- |
+| `None` | "agent", Default: the policies run on every call the agent signs | "admin", only if `admins` is not empty |
+| `Some(usdc)` | "payments", calls to `usdc` only: the agent key can pay in that token, within its policies, and do nothing else | "admin" (Default, no policies), only if `admins` is not empty, to change rules and policies |
+
+From TypeScript:
+
+```ts
+await deployAgentWallet({
+  rpcUrl, networkPassphrase, deployer, walletWasmHash, verifier, signerKey: agentKey,
+  policy: trustPolicy, params: { registry, attesters, minScore: 80, quorum: 2, maxUnverified: 0n },
+  token: usdc,
+  spendingLimit: { policy: spendingLimitPolicy, spendingLimit: 5_000_000n, periodLedgers: 17_280 }, // 0.5 USDC a day
+});
+```
 
 ## Paying over x402
 
@@ -65,6 +100,6 @@ Smart-account authorization plus the policy's cross-contract call to the registr
 
 ## Proven on testnet
 
-In the [latest run](testnet/README.md) the wallet paid the good seller (trusted by 2 of 2 attesters at score ≥ 80) and refused the broken and wrong-content-type endpoints of the bad seller inside its own `__check_auth`.
+In the [latest run](testnet/README.md) the wallet paid the good seller (trusted by 2 of 2 attesters at score ≥ 80) and refused the broken and wrong-content-type endpoints of the bad seller inside its own `__check_auth`. A second, budgeted wallet (trust policy plus a spending limit of 2.5 calls a day) paid the good seller twice, was refused the third call by the spending limit, and was refused the bad seller by the trust policy.
 
-Tests: `cargo test -p scope-trust-policy` runs the policy end to end with a real OpenZeppelin smart account, an ed25519 signer and token transfers.
+Tests: `cargo test -p scope-trust-policy` runs the policy end to end with a real OpenZeppelin smart account, an ed25519 signer and token transfers. `cargo test -p scope-agent-wallet` runs the deployed wallet with both policies: payments up to the limit, the rolling window, untrusted sellers refused within the budget, and the agent key unable to move any other token.
