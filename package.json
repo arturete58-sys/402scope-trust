@@ -19,7 +19,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test dist/test/unit.test.js dist/test/integration.test.js",
     "start": "node dist/cli.js serve",
-    "mcp": "node dist/cli.js mcp"
+    "mcp": "node dist/cli.js mcp",
+    "prepare": "tsc -p tsconfig.json"
   },
   "repository": {
     "type": "git",

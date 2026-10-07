@@ -46,6 +46,37 @@ export async function runMcp(): Promise<void> {
     },
   );
 
+  // The observatory's own measurements (any network it measures), as a
+  // sell / sell_and_warn / hold decision on the caller's thresholds: the
+  // seller policy agreed with settlement partners, on the fault rate upper bound.
+  const observatory = (process.env.OBSERVATORY_URL ?? 'https://402scope.org').replace(/\/+$/, '');
+  server.registerTool(
+    'observatory_decision',
+    {
+      title: 'Decide whether to pay or resell an x402 endpoint',
+      description:
+        'Reads the 402Scope observatory\'s signed aggregate for an x402 endpoint (paid measurements on Base, Solana, XRPL and Stellar) ' +
+        'and returns sell, sell_and_warn, hold or unknown on your two thresholds of the fault rate upper bound. ' +
+        'On hold, do not pay. On sell_and_warn, pay small amounts or tell the user. On unknown, the endpoint is not measured.',
+      inputSchema: {
+        url: z.string().url().describe('Full URL of the x402 resource'),
+        warn_max: z.number().min(0).max(1).default(0.15).describe('Warn above this fault rate upper bound (0.15 = 15%)'),
+        hold_max: z.number().min(0).max(1).default(0.3).describe('Hold above this fault rate upper bound (0.30 = 30%)'),
+      },
+    },
+    async ({ url, warn_max, hold_max }) => {
+      try {
+        const r = await fetch(`${observatory}/v1/provider?endpoint=${encodeURIComponent(url)}`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(20_000) });
+        if (!r.ok) throw new Error(`402Scope observatory returned ${r.status}`);
+        const d = observatoryDecision((await r.json()) as ProviderState, warn_max, Math.max(warn_max, hold_max));
+        const line = `${d.decision.toUpperCase()} — ${d.reason} Record: ${observatory}/p/?endpoint=${encodeURIComponent(url)}`;
+        return { content: [{ type: 'text', text: line }], structuredContent: { url, ...d } };
+      } catch (e) {
+        return { isError: true, content: [{ type: 'text', text: `error: observatory_unreachable: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
   server.registerTool(
     'list_trusted_endpoints',
     {
@@ -73,4 +104,26 @@ export async function runMcp(): Promise<void> {
   );
 
   await server.connect(new StdioServerTransport());
+}
+
+export interface ProviderState {
+  status?: string;
+  n?: number | null;
+  faultsObserved?: number | null;
+  faultRateUpperBound?: number | null;
+  liveness?: { outcome?: string } | null;
+}
+
+/** Same rules as the observatory's /v1/decision and the 402scope.org checker. */
+export function observatoryDecision(p: ProviderState, warnMax: number, holdMax: number) {
+  const bound = typeof p.faultRateUpperBound === 'number' ? p.faultRateUpperBound : null;
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const base = { status: p.status ?? 'no_data', faultRateUpperBound: bound, n: p.n ?? null, faultsObserved: p.faultsObserved ?? null, warnMax, holdMax };
+  const out = p.liveness?.outcome;
+  if (out === 'gone' || out === 'unreachable') return { ...base, decision: 'hold' as const, reason: `The endpoint is ${out} at the last liveness check.` };
+  if (!p.status || p.status === 'no_data' || bound === null) return { ...base, decision: 'unknown' as const, reason: 'Not measured yet: no fault rate bound exists for this endpoint.' };
+  if (bound > holdMax) return { ...base, decision: 'hold' as const, reason: `Fault rate upper bound ${pct(bound)} is above ${pct(holdMax)}.` };
+  if (p.status !== 'published') return { ...base, decision: 'sell_and_warn' as const, reason: `State is ${p.status} (n=${p.n ?? 0}); bound ${pct(bound)} is within ${pct(holdMax)}.` };
+  if (bound >= warnMax) return { ...base, decision: 'sell_and_warn' as const, reason: `Bound ${pct(bound)} is between ${pct(warnMax)} and ${pct(holdMax)}.` };
+  return { ...base, decision: 'sell' as const, reason: `Published, and bound ${pct(bound)} is within ${pct(warnMax)}.` };
 }

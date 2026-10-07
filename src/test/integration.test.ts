@@ -120,7 +120,7 @@ test('MCP server lists its tools and answers check_before_pay', async () => {
   send({ method: 'notifications/initialized' });
   send({ id: 2, method: 'tools/list' });
   const tools = await wait(2);
-  assert.deepEqual(tools.result.tools.map((t: { name: string }) => t.name).sort(), ['check_before_pay', 'list_trusted_endpoints']);
+  assert.deepEqual(tools.result.tools.map((t: { name: string }) => t.name).sort(), ['check_before_pay', 'list_trusted_endpoints', 'observatory_decision']);
   send({ id: 3, method: 'tools/call', params: { name: 'check_before_pay', arguments: { url: `${sellerUrl}/good` } } });
   const r = await wait(3);
   child.kill();

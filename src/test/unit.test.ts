@@ -156,3 +156,14 @@ test('declarations: terms are validated', () => {
   assert.equal(validateTerms({ version: 2 }).length, 1);
   assert.throws(() => declareDeliveryTerms({ version: 1, freshness: { maxAgeSeconds: -1 } }));
 });
+
+import { observatoryDecision } from '../mcp.js';
+test('observatory decision follows the seller policy on the bound', () => {
+  const d = (p: object) => observatoryDecision(p as never, 0.15, 0.3).decision;
+  assert.equal(d({ status: 'published', faultRateUpperBound: 0.06, n: 142 }), 'sell');
+  assert.equal(d({ status: 'published', faultRateUpperBound: 0.2, n: 142 }), 'sell_and_warn');
+  assert.equal(d({ status: 'provisional', faultRateUpperBound: 0.102, n: 34 }), 'sell_and_warn');
+  assert.equal(d({ status: 'provisional', faultRateUpperBound: 0.301, n: 34 }), 'hold');
+  assert.equal(d({ status: 'published', faultRateUpperBound: 0.02, liveness: { outcome: 'gone' } }), 'hold');
+  assert.equal(d({ status: 'no_data' }), 'unknown');
+});
