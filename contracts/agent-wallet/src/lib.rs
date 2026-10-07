@@ -33,17 +33,21 @@ impl AgentWallet {
     /// contract address -> its install parameters), scoped to `token` when
     /// set; then, if `admins` is not empty, an "admin" rule (id 1).
     pub fn __constructor(e: &Env, signers: Vec<Signer>, policies: Map<Address, Val>, token: Option<Address>, admins: Vec<Signer>) {
-        match token {
-            None => {
-                smart_account::add_context_rule(e, &ContextRuleType::Default, &String::from_str(e, "agent"), None, &signers, &policies);
-            }
-            Some(t) => {
-                smart_account::add_context_rule(e, &ContextRuleType::CallContract(t), &String::from_str(e, "payments"), None, &signers, &policies);
-            }
-        }
+        let agent = match token {
+            None => smart_account::add_context_rule(e, &ContextRuleType::Default, &String::from_str(e, "agent"), None, &signers, &policies),
+            Some(t) => smart_account::add_context_rule(e, &ContextRuleType::CallContract(t), &String::from_str(e, "payments"), None, &signers, &policies),
+        };
+        let mut ids = Vec::from_array(e, [agent.id]);
         if !admins.is_empty() {
-            smart_account::add_context_rule(e, &ContextRuleType::Default, &String::from_str(e, "admin"), None, &admins, &Map::new(e));
+            ids.push_back(smart_account::add_context_rule(e, &ContextRuleType::Default, &String::from_str(e, "admin"), None, &admins, &Map::new(e)).id);
         }
+        // Reading a rule extends its entries (rule, signers, policies) to 30 days, here
+        // at deploy time and paid by the deployer. Otherwise the agent's first payment
+        // would pay that rent, and its fee could go over a facilitator's ceiling.
+        for id in ids.iter() {
+            smart_account::get_context_rule(e, id);
+        }
+        e.storage().instance().extend_ttl(29 * 17_280, 30 * 17_280);
     }
 }
 
