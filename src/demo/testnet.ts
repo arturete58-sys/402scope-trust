@@ -136,7 +136,11 @@ async function main(): Promise<void> {
   }
 
   // 3. Local facilitator and two sellers
-  const facilitator = new x402Facilitator().register(NETWORK, new FacilitatorScheme([createEd25519Signer(k.facilitator.secret(), NETWORK)]));
+  // Smart-account payments run __check_auth and the policy (cross-contract reads), so they cost more
+  // than a classic transfer; the facilitator's default fee ceiling (50,000 stroops) is raised here.
+  const facilitator = new x402Facilitator().register(NETWORK, new FacilitatorScheme([createEd25519Signer(k.facilitator.secret(), NETWORK)], { maxTransactionFeeStroops: 2_000_000 }));
+  const verifyLog: unknown[] = [];
+  facilitator.onAfterVerify(async (ctx: unknown) => { const r = (ctx as { result?: { isValid: boolean; invalidReason?: string; invalidMessage?: string; payer?: string } }).result; if (r && !r.isValid) verifyLog.push(r); });
   const facClient = {
     verify: (p: PaymentPayload, r: PaymentRequirements) => facilitator.verify(p, r),
     settle: (p: PaymentPayload, r: PaymentRequirements) => facilitator.settle(p, r),
@@ -237,7 +241,8 @@ async function main(): Promise<void> {
       const r = await agent(`${base}/${name}`);
       const settle = r.headers.get('PAYMENT-RESPONSE');
       const txh = settle ? JSON.parse(Buffer.from(settle, 'base64').toString()).transaction : null;
-      walletPayments.push({ endpoint: `/${name}`, outcome: r.ok ? 'paid' : `HTTP ${r.status}`, tx: txh ? txUrl(txh) : null });
+      const detail = r.ok ? undefined : (await r.text()).slice(0, 300);
+      walletPayments.push({ endpoint: `/${name}`, outcome: r.ok ? 'paid' : `HTTP ${r.status}`, tx: txh ? txUrl(txh) : null, reason: detail, facilitator: r.ok ? undefined : verifyLog.at(-1) });
       log(`agent wallet /${name}: HTTP ${r.status}`);
     } catch (e) {
       const msg = (e as Error).message;
