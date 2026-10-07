@@ -310,7 +310,7 @@ async function main(): Promise<void> {
   out.rankedDiscovery = (await rankResources(listing, onchainCheck)).map((it) => ({ endpoint: String(it.resource).replace(base, ''), trusted: it.trust?.trusted ?? null, score: it.trust?.score ?? null }));
 
   // 8. OpenZeppelin's Built on Stellar facilitator as a drop-in (testnet key from its public generator)
-  out.openzeppelin = await tryOpenZeppelin({ token, sellerGood: k.sellerGood, buyer: k.buyer1, wallet, agentKey, verifier });
+  out.openzeppelin = await tryOpenZeppelin({ server, token, sellerGood: k.sellerGood, buyer: k.buyer1, wallet, agentKey, verifier });
 
   // 9. Stellar's official demo (unpaid conformance check)
   try {
@@ -340,11 +340,12 @@ async function main(): Promise<void> {
 
 /**
  * Pays the good seller through OpenZeppelin's hosted facilitator, from a
- * classic account and from the agent wallet. Never fails the demo: what the
- * hosted facilitator accepts (assets, smart-account payers, fee ceiling) is
- * recorded as a finding.
+ * classic account and from the agent wallet, first in the SCOPE test token
+ * and then in testnet USDC (bought on the testnet DEX, if there is liquidity).
+ * Never fails the demo: what the hosted facilitator accepts is recorded,
+ * with its own verify/settle answers, as a finding.
  */
-async function tryOpenZeppelin(o: { token: string; sellerGood: Keypair; buyer: Keypair; wallet: string; agentKey: Keypair; verifier: string }): Promise<Record<string, unknown>> {
+async function tryOpenZeppelin(o: { server: rpc.Server; token: string; sellerGood: Keypair; buyer: Keypair; wallet: string; agentKey: Keypair; verifier: string }): Promise<Record<string, unknown>> {
   const url = 'https://channels.openzeppelin.com/x402/testnet';
   const res: Record<string, unknown> = { facilitator: url };
   try {
@@ -357,26 +358,56 @@ async function tryOpenZeppelin(o: { token: string; sellerGood: Keypair; buyer: K
     const client = new HTTPFacilitatorClient({ url, createAuthHeaders: async () => ({ verify: auth, settle: auth, supported: auth }) });
     const supported = await client.getSupported();
     res.supported = (supported.kinds ?? []).map((x: { scheme: string; network: string }) => `${x.scheme} ${x.network}`);
-    const rs = new x402ResourceServer(client).register(NETWORK, new ServerScheme());
-    const app = express();
-    app.use(paymentMiddleware({ 'GET /oz': { accepts: { scheme: 'exact', network: NETWORK, payTo: o.sellerGood.publicKey(), price: { amount: PRICE, asset: o.token } }, description: 'Quote via OpenZeppelin', mimeType: 'application/json' } } as never, rs));
-    app.get('/oz', (_q, s) => { s.json({ pair: 'XLM/USD', price: 0.42 }); });
-    const h = await new Promise<import('node:http').Server>((ok) => { const x = app.listen(0, '127.0.0.1', () => ok(x)); });
-    const target = `http://127.0.0.1:${(h.address() as AddressInfo).port}/oz`;
-    const attempt = async (label: string, f: typeof fetch) => {
-      try {
-        const r = await f(target, { signal: AbortSignal.timeout(90_000) });
-        const settle = r.headers.get('PAYMENT-RESPONSE');
-        const txh = settle ? JSON.parse(Buffer.from(settle, 'base64').toString()).transaction : null;
-        return { payer: label, outcome: r.ok ? 'paid' : `HTTP ${r.status}`, tx: txh ? txUrl(txh) : null, detail: r.ok ? undefined : (await r.text()).slice(0, 200) };
-      } catch (e) {
-        return { payer: label, outcome: 'error', detail: (e as Error).message.slice(0, 200) };
-      }
+    // Record the facilitator's own answers.
+    let last: unknown = null;
+    const logged = {
+      verify: async (p: PaymentPayload, r: PaymentRequirements) => { try { const v = await client.verify(p, r); last = { step: 'verify', ...v }; return v; } catch (e) { last = { step: 'verify', error: (e as Error).message.slice(0, 200) }; throw e; } },
+      settle: async (p: PaymentPayload, r: PaymentRequirements) => { try { const v = await client.settle(p, r); last = { step: 'settle', ...v }; return v; } catch (e) { last = { step: 'settle', error: (e as Error).message.slice(0, 200) }; throw e; } },
+      getSupported: () => client.getSupported(),
     };
-    res.payments = [
-      await attempt('classic account', wrapFetchWithPayment(fetch, x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new ClientScheme(createEd25519Signer(o.buyer.secret(), NETWORK)) }], spendControls: false }))),
-      await attempt('agent wallet', wrapFetchWithPayment(fetch, x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new AgentWalletExactScheme({ account: o.wallet, key: o.agentKey, verifier: o.verifier, contextRuleId: 0 }, { url: RPC }) }], spendControls: false }))),
-    ];
+    const rs = new x402ResourceServer(logged as never).register(NETWORK, new ServerScheme());
+
+    // USDC on the testnet DEX for the buyer, and some for the agent wallet.
+    let usdc: string | null = null;
+    try {
+      const USDC = new Asset('USDC', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
+      await classic(o.server, o.buyer, [Operation.changeTrust({ asset: USDC })]);
+      await classic(o.server, o.buyer, [Operation.pathPaymentStrictSend({ sendAsset: Asset.native(), sendAmount: '500', destination: o.buyer.publicKey(), destAsset: USDC, destMin: '0.05', path: [] })]);
+      usdc = USDC.contractId(PASS);
+      await submit(o.server, PASS, o.buyer, Operation.invokeContractFunction({ contract: usdc, function: 'transfer', args: [new Address(o.buyer.publicKey()).toScVal(), new Address(o.wallet).toScVal(), nativeToScVal(200_000n, { type: 'i128' })] }));
+      res.usdc = 'bought on the testnet DEX';
+    } catch (e) {
+      res.usdc = `not available: ${(e as Error).message.slice(0, 160)}`;
+    }
+
+    const app = express();
+    const route = (asset: string) => ({ accepts: { scheme: 'exact', network: NETWORK, payTo: o.sellerGood.publicKey(), price: { amount: PRICE, asset } }, description: 'Quote via OpenZeppelin', mimeType: 'application/json' });
+    app.use(paymentMiddleware({ 'GET /oz-scope': route(o.token), ...(usdc ? { 'GET /oz-usdc': route(usdc) } : {}) } as never, rs));
+    app.get(['/oz-scope', '/oz-usdc'], (_q, s) => { s.json({ pair: 'XLM/USD', price: 0.42 }); });
+    const h = await new Promise<import('node:http').Server>((ok) => { const x = app.listen(0, '127.0.0.1', () => ok(x)); });
+    const base = `http://127.0.0.1:${(h.address() as AddressInfo).port}`;
+    const payers = {
+      'classic account': wrapFetchWithPayment(fetch, x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new ClientScheme(createEd25519Signer(o.buyer.secret(), NETWORK)) }], spendControls: false })),
+      'agent wallet': wrapFetchWithPayment(fetch, x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new AgentWalletExactScheme({ account: o.wallet, key: o.agentKey, verifier: o.verifier, contextRuleId: 0 }, { url: RPC }) }], spendControls: false })),
+    };
+    const payments: Record<string, unknown>[] = [];
+    for (const [asset, path] of [['SCOPE', '/oz-scope'], ...(usdc ? [['USDC', '/oz-usdc']] : [])]) {
+      for (const [payer, f] of Object.entries(payers)) {
+        last = null;
+        try {
+          const r = await f(`${base}${path}`, { signal: AbortSignal.timeout(90_000) });
+          const settle = r.headers.get('PAYMENT-RESPONSE');
+          const txh = settle ? JSON.parse(Buffer.from(settle, 'base64').toString()).transaction : null;
+          let challengeError: string | undefined;
+          const pr = r.headers.get('PAYMENT-REQUIRED');
+          if (!r.ok && pr) { try { challengeError = JSON.parse(Buffer.from(pr, 'base64').toString()).error; } catch { /* ignore */ } }
+          payments.push({ asset, payer, outcome: r.ok ? 'paid' : `HTTP ${r.status}`, tx: txh ? txUrl(txh) : null, facilitator: r.ok ? undefined : last, error: challengeError });
+        } catch (e) {
+          payments.push({ asset, payer, outcome: 'error', detail: (e as Error).message.slice(0, 200), facilitator: last });
+        }
+      }
+    }
+    res.payments = payments;
     h.close();
   } catch (e) {
     res.error = (e as Error).message.slice(0, 300);

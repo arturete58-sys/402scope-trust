@@ -96,9 +96,14 @@ if (r.openzeppelin) {
   const z = r.openzeppelin;
   if (z.error) out.push(`Tried [${z.facilitator}](${z.facilitator}); not usable in this run: ${String(z.error).replace(/\|/g, '/')}`, '');
   else {
-    out.push(`The same seller code, pointed at ${z.facilitator} instead of a local facilitator. Supported: ${(z.supported ?? []).join(', ') || 'none listed'}.`, '');
-    out.push('| Payer | Outcome | Detail |', '| --- | --- | --- |');
-    for (const p of z.payments ?? []) out.push(`| ${p.payer} | **${p.outcome}** | ${p.tx ? `[settlement](${p.tx})` : String(p.detail ?? '').replace(/\|/g, '/').replace(/\n/g, ' ').slice(0, 160)} |`);
+    out.push(`The same seller code, pointed at ${z.facilitator} instead of a local facilitator. Supported: ${(z.supported ?? []).join(', ') || 'none listed'}. Testnet USDC: ${z.usdc ?? 'not tried'}.`, '');
+    out.push('| Asset | Payer | Outcome | Detail |', '| --- | --- | --- | --- |');
+    const why = (p) => {
+      const f = p.facilitator ?? {};
+      const bits = [p.error, f.step && `${f.step}: ${f.invalidReason ?? f.errorReason ?? f.error ?? ''} ${f.invalidMessage ?? f.errorMessage ?? ''}`, p.detail].filter(Boolean);
+      return bits.join(' · ').replace(/\|/g, '/').replace(/\n/g, ' ').slice(0, 200);
+    };
+    for (const p of z.payments ?? []) out.push(`| ${p.asset ?? 'SCOPE'} | ${p.payer} | **${p.outcome}** | ${p.tx ? `[settlement](${p.tx})` : why(p)} |`);
     out.push('');
   }
 }

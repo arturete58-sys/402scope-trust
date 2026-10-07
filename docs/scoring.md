@@ -1,18 +1,20 @@
-# Scoring method v2
+# Scoring method v3
 
 A score answers one question for an agent about to pay an x402 endpoint on Stellar: **if I pay, will I get what was declared, at the declared price?**
 
-Scores are out of 100 and built from five parts. Reference implementation: `src/score.ts` (`METHOD_VERSION = 2`).
+Scores are out of 100 and built from five parts. Reference implementation: `src/score.ts` (`METHOD_VERSION = 3`).
 
 | Part | Points | How it is measured |
 | --- | --- | --- |
-| Delivery | 50 | Share of paid calls that were delivered: HTTP 2xx, settled (a `PAYMENT-RESPONSE` with a transaction hash), non-empty body, and the content type declared in `resource.mimeType` |
+| Delivery | 50 | Share of paid calls that were delivered: HTTP 2xx, settled (a `PAYMENT-RESPONSE` with a transaction hash), non-empty body, the content type declared in `resource.mimeType`, and not breaking the seller's own [declaration](declarations.md) |
 | Signed receipts | 15 | Share of paid calls that came with a valid [delivery receipt](receipts.md) signed by the `payTo` key, bound to that payment and that body |
 | Price | 15 | Every paid call settled at the amount declared in the 402 challenge. With the `exact` scheme the client signs the exact amount, so today this mostly checks that settlement happened; it becomes a real comparison with metered schemes such as `upto` |
 | Latency | 10 | Median latency of paid calls: up to 7 s = 10, up to 12 s = 5, slower = 0. Paid latency includes onchain settlement, which x402 servers complete before answering (about one ledger, ~5 s on Stellar) |
-| Declaration | 10 | The unpaid 402 challenge conforms to x402 v2 for Stellar; minus 2 per issue found |
+| Declaration | 10 | 5 for publishing delivery terms (`extensions.declarations`); 5 for an unpaid 402 challenge that conforms to x402 v2 for Stellar, minus 1 per issue found |
 
-Receipts are optional for sellers. A seller without them can still reach 85, enough for most thresholds; one with them shows, call by call, that it stands behind what it delivered.
+Receipts and terms are optional for sellers. A seller with neither can still reach 80; one with both shows, call by call, that it stands behind what it delivered and what it said about it.
+
+A seller is only held to what it declared itself, at source or in fields an exact x402-declarations adapter reads. Declarations inferred from field names (`heuristic`) are recorded but never count against it.
 
 ## Seller score
 
@@ -36,9 +38,11 @@ An attestation is also published per seller (its `payTo` address), because that 
 | `avoid` | Score below 40 or a hard failure | Do not pay |
 | `unknown` | Not measured with paid calls yet | Ask the user |
 
-## Changes from v1
+## Changes
 
-v1 had delivery 60, price 20, latency 10, declaration 10. v2 moves 10 points from delivery and 5 from price to signed receipts. Attestations record the method version they were computed with.
+- v1: delivery 60, price 20, latency 10, declaration 10.
+- v2: 10 points from delivery and 5 from price move to signed receipts.
+- v3: a call that breaks the seller's own declaration is not delivered; half of the declaration points reward publishing delivery terms. Attestations record the method version they were computed with.
 
 ## Independence
 

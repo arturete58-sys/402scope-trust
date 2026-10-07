@@ -19,6 +19,7 @@ X-402-Receipt: <base64url(JSON)>
   "payment": "<hex sha256 of the PAYMENT-SIGNATURE request header>",
   "body": "<hex sha256 of the response body bytes>",
   "at": "2026-10-07T07:40:12.345Z",
+  "decl": "<hex sha256 of the X-402-Declaration header, when the response has one>",
   "signer": "G... (Stellar public key)",
   "sig": "<base64 ed25519 signature>"
 }
@@ -30,7 +31,7 @@ The signed message is the UTF-8 string
 x402-receipt/1\n<resource>\n<payment>\n<body>\n<at>
 ```
 
-signed with the ed25519 key of `signer`.
+followed by `\n<decl>` when the response carried a [declaration](declarations.md), signed with the ed25519 key of `signer`. A receipt then binds what the seller stated about the response (its age, source...) as well as the body.
 
 ## Verification
 
@@ -40,10 +41,14 @@ A buyer, or an attester, checks a receipt against the request it sent and the bo
 | --- | --- |
 | `valid` | The signature checks, `payment` and `body` match, and `signer` is the `payTo` that was paid |
 | `unbound` | The signature and hashes check, but the signer is not the `payTo`. It proves nothing about the seller being paid and counts as no receipt |
-| `invalid` | Bad signature or a hash mismatch: the seller signed something other than what was delivered |
+| `invalid` | Bad signature or a hash mismatch: the seller signed something other than what was delivered, or a declaration was added, removed or changed |
 | `missing` | No receipt header |
 
 Only `valid` receipts count. Binding the receipt to the hash of `PAYMENT-SIGNATURE` means it cannot be replayed for another payment; binding it to the body hash means the seller cannot later deny what it returned.
+
+## Relation to the x402 offer-receipt extension
+
+x402 has an official `offer-receipt` extension: a signed receipt that a payment was received for a resource (payer, network, resource, time, optionally the transaction). It does not cover the content. `x402-receipt/1` covers what was delivered: the body hash and the declaration, bound to the exact payment. The two are complementary; a seller can send both.
 
 ## For sellers
 

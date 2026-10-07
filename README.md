@@ -13,7 +13,7 @@ AI agent → x402 client → Agent wallet (OpenZeppelin smart account) → Trust
                                   pays trusted sellers · refuses the rest
 ```
 
-**Live on Stellar testnet:** the [latest end-to-end run](docs/testnet/README.md) shows two bonded attesters scoring two sellers onchain, evidence checked by the contract, and an agent wallet paying the good seller while its policy refuses the bad one. Every step is a transaction you can open.
+**Live on Stellar testnet:** the [latest end-to-end run](docs/testnet/README.md) shows two bonded attesters scoring three sellers onchain, a seller caught breaking its own signed declaration, evidence checked by the contract, an agent wallet paying the good seller while its policy refuses the others, and a standard facilitator refusing to settle with an untrusted seller. Every step is a transaction you can open.
 
 Part of the [402Scope observatory](https://402scope.org). Applying to the Stellar Community Fund (SCF #46).
 
@@ -23,15 +23,18 @@ Part of the [402Scope observatory](https://402scope.org). Applying to the Stella
 | --- | --- |
 | Unpaid probe of the 402 challenge (x402 v2, Stellar `exact`) | Working, tested against the official `@x402/express` seller and Stellar's x402 demo |
 | Paid measurement through the standard x402 client (`@x402/stellar`) | Working |
-| Signed delivery receipts (`X-402-Receipt`) and seller middleware | Working, tested — [docs/receipts.md](docs/receipts.md) |
-| Scoring method v2 (endpoint and seller scores) | Working, tested — [docs/scoring.md](docs/scoring.md) |
+| Delivery declarations as an x402 extension (`extensions.declarations`, `X-402-Declaration`), in the [x402-declarations](https://github.com/arturete58-sys/x402-declarations) vocabulary | Working, tested with the official `@x402/express` — [docs/declarations.md](docs/declarations.md) |
+| Signed delivery receipts (`X-402-Receipt`), binding body and declaration | Working, tested — [docs/receipts.md](docs/receipts.md) |
+| Scoring method v3 (endpoint and seller scores; breaking one's own declaration is a failed delivery) | Working, tested — [docs/scoring.md](docs/scoring.md) |
 | Attestation registry: bonded attesters, slashing, quorum reads | Working, 10 tests — [docs/attestation-spec.md](docs/attestation-spec.md) |
 | Merkle evidence, verifiable onchain | Working, same test vector in Rust and TypeScript — [docs/evidence.md](docs/evidence.md) |
 | Trust policy for OpenZeppelin smart accounts | Working, 8 end-to-end tests — [docs/agent-wallet.md](docs/agent-wallet.md) |
 | Agent wallet paying over x402 (`AgentWalletExactScheme`) | Working on testnet with a standard facilitator |
+| Any facilitator: trust hooks for `@x402/core` facilitators (flag or block), ranked Bazaar discovery, `/v1/sellers` API | Working, tested — [docs/facilitators.md](docs/facilitators.md) |
 | Off-chain trust guard for classic accounts, MCP server, read API | Working, tested |
 | Bazaar and `/.well-known/x402` discovery | Working |
 | End-to-end testnet demo in CI | [Testnet demo workflow](.github/workflows/testnet-demo.yml), report in [docs/testnet](docs/testnet/README.md) |
+| Draft of the declarations extension for the x402 specification | [Draft, not submitted](docs/proposals/x402-extension-declarations.md) |
 | Dispute process for slashing, mainnet, audit | Next (SCF tranches) |
 
 ## Quick start
@@ -143,6 +146,25 @@ await pay('https://api.example.com/paid-data'); // the wallet itself refuses unt
 ```
 
 Facilitators need a fee ceiling (`maxTransactionFeeStroops`) above the default 50,000 stroops to accept smart-account payments; see [docs/agent-wallet.md](docs/agent-wallet.md).
+
+### Declare what you deliver (sellers)
+
+```ts
+import { declareDeliveryTerms, declare } from '402scope-trust';
+
+app.use(paymentMiddleware({
+  'GET /quote': { accepts, mimeType: 'application/json',
+    extensions: declareDeliveryTerms({ version: 1, freshness: { maxAgeSeconds: 60 }, perResponse: true, onBreach: 'refund' }) },
+}, server));
+app.get('/quote', (req, res) => { declare(res, { freshness: { ageSeconds: cache.age() } }); res.json(cache.quote()); });
+```
+
+### Use it in a facilitator
+
+```ts
+import { withTrustHooks, onchainSellerChecker } from '402scope-trust';
+withTrustHooks(facilitator, { check: onchainSellerChecker(cfg, 80), mode: 'flag' }); // or 'block'
+```
 
 ## Independence
 
