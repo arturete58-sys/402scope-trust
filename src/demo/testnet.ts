@@ -371,7 +371,9 @@ async function tryOpenZeppelin(o: { server: rpc.Server; token: string; sellerGoo
     let usdc: string | null = null;
     try {
       const USDC = new Asset('USDC', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
+      // The seller needs a USDC trustline to receive (SAC error #13 otherwise).
       await classic(o.server, o.buyer, [Operation.changeTrust({ asset: USDC })]);
+      await classic(o.server, o.sellerGood, [Operation.changeTrust({ asset: USDC })]);
       await classic(o.server, o.buyer, [Operation.pathPaymentStrictSend({ sendAsset: Asset.native(), sendAmount: '500', destination: o.buyer.publicKey(), destAsset: USDC, destMin: '0.05', path: [] })]);
       usdc = USDC.contractId(PASS);
       await submit(o.server, PASS, o.buyer, Operation.invokeContractFunction({ contract: usdc, function: 'transfer', args: [new Address(o.buyer.publicKey()).toScVal(), new Address(o.wallet).toScVal(), nativeToScVal(200_000n, { type: 'i128' })] }));
