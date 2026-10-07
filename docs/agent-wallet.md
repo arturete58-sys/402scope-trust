@@ -61,7 +61,7 @@ The facilitator verifies and settles the transaction unchanged; no facilitator c
 
 ### Facilitator fee ceiling
 
-Smart-account authorization plus the policy's cross-contract call to the registry cost more resources than a classic account payment. The default `maxTransactionFeeStroops` of the Stellar facilitator (50,000) can be too low and the payment then fails verification with a 402. The testnet demo runs its facilitator with 2,000,000 stroops (0.2 XLM). Facilitators that want to accept agent wallets need a ceiling in that range.
+Smart-account authorization plus the policy's cross-contract call to the registry cost more resources than a classic account payment. The default `maxTransactionFeeStroops` of the Stellar facilitator (50,000) can be too low and the payment then fails verification with a 402. The testnet demo runs its facilitator with 2,000,000 stroops (0.2 XLM). Self-hosted facilitators that want to accept agent wallets need a ceiling in that range. OpenZeppelin's hosted Built on Stellar facilitator settled an agent-wallet payment in testnet USDC as it is ([latest run](testnet/README.md)).
 
 ## Proven on testnet
 

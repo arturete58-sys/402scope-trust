@@ -13,7 +13,7 @@ AI agent → x402 client → Agent wallet (OpenZeppelin smart account) → Trust
                                   pays trusted sellers · refuses the rest
 ```
 
-**Live on Stellar testnet:** the [latest end-to-end run](docs/testnet/README.md) shows two bonded attesters scoring three sellers onchain, a seller caught breaking its own signed declaration, evidence checked by the contract, an agent wallet paying the good seller while its policy refuses the others, and a standard facilitator refusing to settle with an untrusted seller. Every step is a transaction you can open.
+**Live on Stellar testnet:** the [latest end-to-end run](docs/testnet/README.md) shows two bonded attesters scoring three sellers onchain, a seller caught breaking its own signed declaration, evidence checked by the contract, an agent wallet paying the good seller while its policy refuses the others, a standard facilitator refusing to settle with an untrusted seller, and the agent wallet paying in USDC through OpenZeppelin's hosted Built on Stellar facilitator. Every step is a transaction you can open.
 
 Part of the [402Scope observatory](https://402scope.org). Applying to the Stellar Community Fund (SCF #46).
 

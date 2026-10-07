@@ -48,7 +48,7 @@ For a facilitator that cannot change its code, `discoveryProxy({ upstream, check
 
 ## Smart-account payments and the fee ceiling
 
-Agent wallets are OpenZeppelin smart accounts. Their authorization runs `__check_auth` and the trust policy reads the registry, which costs more resources than a classic payment. The Stellar facilitator's default `maxTransactionFeeStroops` (50,000) can reject them; the testnet demo uses 2,000,000. A facilitator that wants to serve agent wallets needs a ceiling in that range.
+Agent wallets are OpenZeppelin smart accounts. Their authorization runs `__check_auth` and the trust policy reads the registry, which costs more resources than a classic payment. The Stellar facilitator's default `maxTransactionFeeStroops` (50,000) can reject them; the testnet demo uses 2,000,000. A facilitator that wants to serve agent wallets needs a ceiling in that range. OpenZeppelin's hosted facilitator already settles them: the agent wallet paid through it on testnet.
 
 ## Proven on testnet
 
@@ -56,6 +56,6 @@ The [latest run](testnet/README.md) shows:
 
 - a standard `@x402/core` facilitator with `withTrustHooks` in `block` mode settling a plain payment to the good seller and refusing one to the stale seller;
 - the same endpoints ranked as a Bazaar listing;
-- the same seller code pointed at OpenZeppelin's hosted Built on Stellar facilitator, paid from a classic account and from the agent wallet (outcomes recorded as found).
+- the same seller code pointed at OpenZeppelin's hosted Built on Stellar facilitator (`channels.openzeppelin.com/x402/testnet`): paid in testnet USDC from a classic account **and from the agent wallet**, with the trust policy running in `__check_auth`. The hosted facilitator accepts USDC only (`unsupported_asset` for the test token), and its fee handling accepted the smart-account payment as it is.
 
 Reference implementation: `src/facilitator.ts`. Tests: `src/test/integration.test.ts`.
