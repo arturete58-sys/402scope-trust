@@ -64,14 +64,8 @@ The good seller's attestation from attester 1 commits to 10 pieces of evidence (
 | Endpoint | Outcome | Detail |
 | --- | --- | --- |
 | `/good` | **paid** | [settlement](https://stellar.expert/explorer/testnet/tx/35f2f01755a5c14f6e556fbf03126ab85a87bf5f9dcc3959a6bc61f29de4d187) |
-| `/broken` | **refused by the wallet policy** | Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)
-
-Event log (newest first):
-   0: [Diagnostic Event] contract |
-| `/wrong-type` | **refused by the wallet policy** | Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)
-
-Event log (newest first):
-   0: [Diagnostic Event] contract |
+| `/broken` | **refused by the wallet policy** | `__check_auth` failed: the trust policy found no 2-of-2 quorum at score 80 for this seller (`Error(Auth, InvalidAction)`) |
+| `/wrong-type` | **refused by the wallet policy** | `__check_auth` failed: the trust policy found no 2-of-2 quorum at score 80 for this seller (`Error(Auth, InvalidAction)`) |
 
 The refusal happens inside the wallet's own `__check_auth`: the trust policy runs on the signed `transfer` authorization, so the payment cannot be made, whatever the agent's code does.
 

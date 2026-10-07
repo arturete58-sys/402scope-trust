@@ -16,3 +16,7 @@ export { signReceipt, verifyReceipt, decodeReceipt, encodeReceipt, deliveryRecei
 export { evidenceLeaf, evidenceTree, buildTree, proofFor, verifyProof, type MerkleTree } from './evidence.js';
 export { sellerScores, type SellerScore } from './seller.js';
 export { type OnchainView } from './check.js';
+export {
+  AgentWalletExactScheme, walletAuthorizer, authDigest, externalSigner, trustPolicyParams, deployAgentWallet, uploadWasm,
+  type AgentWalletSigner, type TrustPolicyParams,
+} from './smart-account.js';

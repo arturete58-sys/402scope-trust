@@ -2,34 +2,37 @@
 
 **Check an x402 endpoint on Stellar before you pay it.**
 
-[x402](https://x402.org) lets any API charge per request, and AI agents pay automatically. Discovery catalogs tell an agent what a seller *declares*. 402Scope Trust tells it what the seller *does*: independent paid measurements, scored with a public method and published as signed attestations in a Soroban contract.
+[x402](https://x402.org) lets any API charge per request, and AI agents pay automatically. Discovery catalogs tell an agent what a seller *declares*. 402Scope Trust tells it what the seller *does*: bonded, independent attesters make real paid calls, score them with a public method and publish the scores in a Soroban contract, each one backed by a Merkle root of its evidence. An agent wallet built on OpenZeppelin smart accounts then refuses, inside its own `__check_auth`, to pay sellers its chosen attesters do not trust.
 
 ```
-Indexer → Measurer → Scorer + signer → Soroban contract
-                                              ↓
-            AI agent → check_before_pay (MCP / SDK) → pay only if trusted
+Sellers ── X-402-Receipt (signed delivery receipts)
+   ↑ paid x402 calls
+Attesters (bonded, slashable) ── score + evidence root ──→ Attestation registry (Soroban)
+                                                                   ↑ trusted_by(seller, attesters, min_score, quorum)
+AI agent → x402 client → Agent wallet (OpenZeppelin smart account) → Trust policy
+                                  pays trusted sellers · refuses the rest
 ```
 
-**Live on Stellar testnet:** see the [latest end-to-end run](docs/testnet/README.md): contract, real paid calls, scores, attestations and an agent refusing a broken endpoint, every step a transaction you can open.
+**Live on Stellar testnet:** the [latest end-to-end run](docs/testnet/README.md) shows two bonded attesters scoring two sellers onchain, evidence checked by the contract, and an agent wallet paying the good seller while its policy refuses the bad one. Every step is a transaction you can open.
 
-Part of the [402Scope observatory](https://402scope.org). Applying to the Stellar Community Fund (SCF #46, Open Track).
+Part of the [402Scope observatory](https://402scope.org). Applying to the Stellar Community Fund (SCF #46).
 
 ## Status
 
 | Piece | State |
 | --- | --- |
-| Unpaid probe of the 402 challenge (x402 v2, Stellar `exact`) | Working, tested against the official `@x402/express` seller |
+| Unpaid probe of the 402 challenge (x402 v2, Stellar `exact`) | Working, tested against the official `@x402/express` seller and Stellar's x402 demo |
 | Paid measurement through the standard x402 client (`@x402/stellar`) | Working |
-| Scoring method v1 | Working, tested — [docs/scoring.md](docs/scoring.md) |
-| Soroban attestation contract | Working, 9 tests — [docs/attestation-spec.md](docs/attestation-spec.md) |
-| Writing and reading attestations onchain | Working (`scope-trust attest`, `check_before_pay`) |
-| Trust guard for any x402 client | Working, tested — aborts payments to untrusted endpoints |
-| MCP server (`check_before_pay`, `list_trusted_endpoints`) | Working, tested |
-| Public read API | Working, tested |
-| Bazaar discovery indexer | Working against `GET /discovery/resources` |
-| End-to-end testnet demo in CI | [Testnet demo workflow](.github/workflows/testnet-demo.yml) |
-| Smart-account spending policy example | Next (SCF tranche 2) |
-| Mainnet, audit, provider passport | SCF tranche 3 |
+| Signed delivery receipts (`X-402-Receipt`) and seller middleware | Working, tested — [docs/receipts.md](docs/receipts.md) |
+| Scoring method v2 (endpoint and seller scores) | Working, tested — [docs/scoring.md](docs/scoring.md) |
+| Attestation registry: bonded attesters, slashing, quorum reads | Working, 10 tests — [docs/attestation-spec.md](docs/attestation-spec.md) |
+| Merkle evidence, verifiable onchain | Working, same test vector in Rust and TypeScript — [docs/evidence.md](docs/evidence.md) |
+| Trust policy for OpenZeppelin smart accounts | Working, 8 end-to-end tests — [docs/agent-wallet.md](docs/agent-wallet.md) |
+| Agent wallet paying over x402 (`AgentWalletExactScheme`) | Working on testnet with a standard facilitator |
+| Off-chain trust guard for classic accounts, MCP server, read API | Working, tested |
+| Bazaar and `/.well-known/x402` discovery | Working |
+| End-to-end testnet demo in CI | [Testnet demo workflow](.github/workflows/testnet-demo.yml), report in [docs/testnet](docs/testnet/README.md) |
+| Dispute process for slashing, mainnet, audit | Next (SCF tranches) |
 
 ## Quick start
 
@@ -59,7 +62,7 @@ node dist/cli.js check https://api.example.com/paid-data --min 80
 }
 ```
 
-Set `TRUST_API_URL` to use a hosted 402Scope Trust API instead of measuring locally.
+Set `TRUST_API_URL` to use a hosted 402Scope Trust API instead of measuring locally, or `TRUST_CONTRACT_ID`, `TRUST_ATTESTERS` (comma-separated) and `TRUST_QUORUM` to decide from onchain scores.
 
 The tool returns a verdict:
 
@@ -94,7 +97,8 @@ node dist/cli.js index --facilitator https://<facilitator> --seeds seeds.txt
 node dist/cli.js run                              # unpaid probes only
 MEASURE_SECRET=S... node dist/cli.js run --paid   # plus real paid calls (testnet by default)
 node dist/cli.js serve --port 8403                # public read API
-TRUST_CONTRACT_ID=C... TRUST_SIGNER_SECRET=S... node dist/cli.js attest   # write scores onchain
+TRUST_CONTRACT_ID=C... TRUST_ATTESTER_SECRET=S... node dist/cli.js register-attester --amount 1000000000   # lock a bond
+TRUST_CONTRACT_ID=C... TRUST_ATTESTER_SECRET=S... node dist/cli.js attest   # write endpoint and seller scores onchain
 ```
 
 Paid measurement settings: `MEASURE_SECRET` (a dedicated, low-balance wallet), `MEASURE_NETWORK` (`stellar:testnet` or `stellar:pubnet`), `MEASURE_MAX_AMOUNT` (in token units; default 100000 = 0.01 USDC), `STELLAR_RPC_URL` (required on pubnet).
@@ -108,15 +112,37 @@ Paid measurement settings: `MEASURE_SECRET` (a dedicated, low-balance wallet), `
 | `GET /v1/endpoints/{key}` | Full record: probe, paid calls, score |
 | `GET /health` | Service status |
 
-### Contract
+### Contracts
 
-The [testnet demo workflow](.github/workflows/testnet-demo.yml) deploys the contract, runs a seller with four endpoints (good, slow, wrong content type, broken), measures them with real paid calls, writes the attestations onchain and reads them back. Each run lists the contract ID and every transaction in its summary.
+| Contract | Path |
+| --- | --- |
+| Attestation registry | `contracts/attestations` |
+| Trust policy (OpenZeppelin `Policy`) | `contracts/trust-policy` |
+| Agent wallet (OpenZeppelin smart account) | `contracts/agent-wallet` |
+| ed25519 verifier | `contracts/ed25519-verifier` |
 
 ```bash
-cd contracts/attestations
-cargo test
-bash ../../scripts/deploy-testnet.sh   # needs the Stellar CLI
+cd contracts
+cargo test                              # all contracts
+stellar contract build                  # needs the Stellar CLI >= 25.2
+bash ../scripts/deploy-testnet.sh       # registry, policy and verifier on testnet
 ```
+
+The [testnet demo workflow](.github/workflows/testnet-demo.yml) runs the whole flow: it deploys every contract, bonds two attesters, runs two sellers (good and bad) with signed receipts, measures them with real paid calls, writes endpoint and seller scores onchain, checks evidence onchain, and has the agent wallet pay. Run it locally with `node dist/demo/testnet.js --wasm-dir contracts/target/wasm32v1-none/release`.
+
+### Pay from an agent wallet
+
+```ts
+import { x402Client } from '@x402/core/client';
+import { wrapFetchWithPayment } from '@x402/fetch';
+import { AgentWalletExactScheme } from '402scope-trust';
+
+const scheme = new AgentWalletExactScheme({ account: 'C…wallet', key: agentKeypair, verifier: 'C…verifier' });
+const pay = wrapFetchWithPayment(fetch, x402Client.fromConfig({ schemes: [{ network: 'stellar:testnet', client: scheme }] }));
+await pay('https://api.example.com/paid-data'); // the wallet itself refuses untrusted sellers
+```
+
+Facilitators need a fee ceiling (`maxTransactionFeeStroops`) above the default 50,000 stroops to accept smart-account payments; see [docs/agent-wallet.md](docs/agent-wallet.md).
 
 ## Independence
 
@@ -124,7 +150,7 @@ Scores are never for sale. No seller can pay for a score or to change one. The m
 
 ## Development
 
-Built with [Claude Code](https://claude.com/claude-code). Every change is tested (`npm test`, `cargo test`) and reviewed before merging; the contract will be audited through the SCF Audit Bank before mainnet.
+Built with [Claude Code](https://claude.com/claude-code). Every change is tested (`npm test`, `cargo test`) and reviewed before merging; the contracts will be audited through the SCF Audit Bank before mainnet.
 
 ## License
 

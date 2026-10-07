@@ -4,6 +4,11 @@ const r = JSON.parse(fs.readFileSync(process.argv[2] ?? 'demo-result.json', 'utf
 const acct = (a) => `[${a.slice(0, 6)}…${a.slice(-4)}](https://stellar.expert/explorer/testnet/account/${a})`;
 const con = (a) => `[${a.slice(0, 6)}…${a.slice(-4)}](https://stellar.expert/explorer/testnet/contract/${a})`;
 const out = [];
+// Short, readable reason for a refused payment.
+const reason = (msg = '') => {
+  if (/Error\(Auth, InvalidAction\)/.test(msg) && /wallet refused/.test(msg)) return `\`__check_auth\` failed: the trust policy found no ${r.policy?.quorum}-of-${r.policy?.attesters?.length} quorum at score ${r.policy?.minScore} for this seller (\`Error(Auth, InvalidAction)\`)`;
+  return msg.split('\n')[0].replace(/\|/g, '/').slice(0, 160);
+};
 out.push('# 402Scope Trust on Stellar testnet', '');
 out.push(`Run finished ${r.finishedAt}. Every link below is a real testnet transaction or contract on Stellar Expert.`, '');
 
@@ -53,7 +58,7 @@ if (r.evidence) {
 
 out.push('## The agent wallet pays over x402', '');
 out.push('| Endpoint | Outcome | Detail |', '| --- | --- | --- |');
-for (const p of r.walletPayments ?? []) out.push(`| \`${p.endpoint}\` | **${p.outcome}** | ${p.tx ? `[settlement](${p.tx})` : (p.reason ?? '').replace(/\|/g, '/').slice(0, 160)} |`);
+for (const p of r.walletPayments ?? []) out.push(`| \`${p.endpoint}\` | **${p.outcome}** | ${p.tx ? `[settlement](${p.tx})` : reason(p.reason)} |`);
 out.push('', 'The refusal happens inside the wallet\'s own `__check_auth`: the trust policy runs on the signed `transfer` authorization, so the payment cannot be made, whatever the agent\'s code does.', '');
 
 if (r.checks) {
