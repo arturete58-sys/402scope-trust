@@ -34,6 +34,7 @@ Part of the [402Scope observatory](https://402scope.org).
 | Passkey owner for agent wallets (WebAuthn verifier): the owner manages the budget with a passkey, the agent only pays | Working, tested — [docs/agent-wallet.md](docs/agent-wallet.md#the-owner-holds-a-passkey-the-agent-holds-a-key) |
 | Prepaid sellers (`batch-settlement`, e.g. Fermah Pay): probe, paid measurement from a prepaid balance, receipts signed by the ledger's seller role | Working, tested; seller role read on testnet each run — [docs/prepaid-ledgers.md](docs/prepaid-ledgers.md) |
 | Optional automatic refunds: seller bond, `x402-receipt/3` checked onchain, no admin | Working, 10 contract tests, same receipt hash in Rust, TypeScript and Python — [docs/refunds.md](docs/refunds.md) |
+| Escrow (x402 scheme `escrow`): payments held until delivery is shown; confirmed or refunded in seconds; no admin | Working, 8 contract tests, proven on testnet — [docs/escrow.md](docs/escrow.md) |
 | One package with an entry point per role (`/facilitator`, `/seller`, `/buyer`) | Working, tested |
 | Python verifier: receipts, evidence proofs, onchain quorum reads (`stellar-sdk` for Python) | Working, tested against the TypeScript vectors and each testnet deployment — [python/](python) |
 | Typed TypeScript clients for every contract, generated from the deployed wasm | Working — `import { clients } from '402scope-trust'`, [src/clients](src/clients) |
@@ -54,7 +55,7 @@ Part of the [402Scope observatory](https://402scope.org).
 | **Seller** | `scopeSeller({ secret, terms, refund? })` from `402scope-trust/seller` | Delivery terms in your 402 challenge, a signed receipt for every paid response, and an optional refund bond that refunds buyers automatically if you break your own terms |
 | **Buyer or agent** | `scopeFetch({ client, check?, refunds? })` from `402scope-trust/buyer` | A check before paying, a check of what was delivered after paying, and automatic refunds from sellers that offer them |
 
-Refunds are optional and run on a contract with no admin: [docs/refunds.md](docs/refunds.md).
+Refunds and escrow are optional and run on contracts with no admin: [docs/refunds.md](docs/refunds.md), [docs/escrow.md](docs/escrow.md).
 
 ## Quick start
 

@@ -28,7 +28,7 @@ Nobody. The contract has no admin and no upgrade:
 | A response the seller declared unusable, or that contradicts its published terms | Quality the seller never declared |
 | Partial refund when the bond is smaller than the amount | Sellers without a bond |
 
-A seller could stop signing receipts when a response is bad. Then there is nothing to claim, but the missing receipts count against its score and agents can refuse sellers without them (`scopeFetch` with a check). An escrow variant, where the seller is only paid once it posts a receipt, would close that gap; it needs a new x402 scheme and is not built.
+A seller could stop signing receipts when a response is bad. Then there is nothing to claim, but the missing receipts count against its score and agents can refuse sellers without them (`scopeFetch` with a check). [Escrow](escrow.md) closes that gap: the payment is held until delivery is shown.
 
 ## Use it
 
