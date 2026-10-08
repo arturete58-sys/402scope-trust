@@ -23,6 +23,8 @@ export interface DeliveryReport {
   refund?: { outcome: RefundOutcome | 'failed'; tx?: string; contract: string; error?: string };
   /** Escrow payments: what the agent did with the held money. */
   escrow?: { id: string; contract: string; action: 'confirmed' | 'refunded' | 'held' | 'failed'; tx?: string; error?: string };
+  /** responseMs: until the paid response arrived (includes the x402 payment itself); settledMs: until the escrow or refund step finished. */
+  timings?: { responseMs: number; settledMs: number };
 }
 
 /**
@@ -53,7 +55,10 @@ export interface BuyerOptions {
    * Without it, held payments are released or refunded by the deadlines.
    */
   escrow?: { payer: Keypair; rpcUrl?: string; networkPassphrase?: string; confirmWithoutReceipt?: boolean };
+  /** Called once per paid call, after the escrow or refund step (which runs in the background). */
   onReport?: (r: DeliveryReport) => void;
+  /** Wait for the escrow or refund step before returning the response (default false: return at once). */
+  waitForSettlement?: boolean;
 }
 
 const RPC: Record<string, string> = { 'stellar:testnet': 'https://soroban-testnet.stellar.org' };
@@ -80,7 +85,9 @@ export function scopeFetch(o: BuyerOptions): typeof fetch {
       }
       return res;
     }) as typeof fetch;
+    const t0 = Date.now();
     const res = await wrapFetchWithPayment(spy, client)(input, init);
+    const responseMs = Date.now() - t0;
     const url = new Request(input, init).url;
     const body = new Uint8Array(await res.arrayBuffer());
     const declaration = res.headers.get(DECLARATION_HEADER);
@@ -110,6 +117,7 @@ export function scopeFetch(o: BuyerOptions): typeof fetch {
     // Refund only on the seller's own valid signature showing the breach.
     let settledPayer: string | null = null;
     try { settledPayer = JSON.parse(Buffer.from(res.headers.get('PAYMENT-RESPONSE') ?? '', 'base64').toString('utf8')).payer ?? null; } catch { settledPayer = null; }
+    const settleAfter = async () => {
     if (escrowId && accepted?.payTo) {
       const net = accepted.network ?? '';
       const cfg = { contract: accepted.payTo, rpcUrl: o.escrow?.rpcUrl ?? RPC[net], networkPassphrase: o.escrow?.networkPassphrase ?? PASS[net] };
@@ -140,9 +148,14 @@ export function scopeFetch(o: BuyerOptions): typeof fetch {
         report.refund = { outcome: 'failed', contract: cfg.contract, error: (e as Error).message.slice(0, 300) };
       }
     }
+    report.timings = { responseMs, settledMs: Date.now() - t0 };
     o.onReport?.(report);
+    };
+    // The buyer's data never waits for the escrow or the refund: they settle in the background.
     const headers = new Headers(res.headers);
     headers.set('X-402Scope-Delivery', JSON.stringify(report));
+    const done = settleAfter().catch((err: Error) => o.onReport?.({ ...report, refund: report.refund ?? { outcome: 'failed', contract: '', error: err.message } }));
+    if (o.waitForSettlement) await done;
     return new Response(body, { status: res.status, statusText: res.statusText, headers });
   }) as typeof fetch;
 }

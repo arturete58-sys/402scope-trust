@@ -385,6 +385,7 @@ async function main(): Promise<void> {
     client: x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new ClientScheme(createEd25519Signer(k.buyer2.secret(), NETWORK)) }], spendControls: false }),
     refunds: { submitter: k.buyer2, rpcUrl: RPC, networkPassphrase: PASS },
     onReport: (r) => reports.push(r),
+    waitForSettlement: true,
   });
   const bondBefore = (await bondOf(bondCfg, k.sellerStale.publicKey(), token))?.balance ?? 0n;
   for (const name of ['stale', 'good']) {
@@ -404,19 +405,20 @@ async function main(): Promise<void> {
     client: x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new EscrowStellarClientScheme(k.buyer1, { url: RPC }) }], spendControls: false }),
     escrow: { payer: k.buyer1, rpcUrl: RPC, networkPassphrase: PASS },
     onReport: (r) => escrowReports.push(r),
+    waitForSettlement: true, // the demo reads the outcome right away; agents get the data without waiting
   });
   const escrowCalls: Record<string, unknown>[] = [];
   for (const name of ['escrow-good', 'escrow-stale']) {
-    const t0 = Date.now();
     try {
       const r = await escrowAgent(`${base}/${name}`);
-      const dataMs = Date.now() - t0;
       const rep = escrowReports.at(-1)!;
       const hold = rep.escrow ? await escrowHold(escrowCfg, rep.escrow.id) : null;
       escrowCalls.push({
         endpoint: `/${name}`, status: r.status, receipt: rep.receipt, providerAtFault: rep.providerAtFault, codes: rep.codes,
         action: rep.escrow?.action, tx: rep.escrow?.tx ? txUrl(rep.escrow.tx) : null, error: rep.escrow?.error, held: hold?.status ?? null,
-        dataSeconds: Math.round(dataMs / 100) / 10, settledSeconds: Math.round((Date.now() - t0) / 100) / 10,
+        // responseMs includes the x402 payment itself (the facilitator settles it before the response, as with exact).
+        dataSeconds: Math.round((rep.timings?.responseMs ?? 0) / 100) / 10,
+        escrowSeconds: Math.round(((rep.timings?.settledMs ?? 0) - (rep.timings?.responseMs ?? 0)) / 100) / 10,
       });
     } catch (e) {
       escrowCalls.push({ endpoint: `/${name}`, error: (e as Error).message.slice(0, 300), facilitator: verifyLog.at(-1) });

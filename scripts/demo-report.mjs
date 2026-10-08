@@ -144,9 +144,9 @@ if (r.escrow) {
   const x = r.escrow;
   out.push('## Escrow: held until delivery, settled in seconds', '');
   out.push(`The buyer's agent paid the escrow ${con(x.contract)} (x402 scheme \`escrow\`) instead of the seller. The data arrived at once; only the money was held. The agent checked each response: it confirmed the good one, so the seller was paid in the next ledger, and posted the seller's own breach receipt for the stale one, so it was refunded. A seller that posts no receipt within ${x.receiptDeadline} s is refunded by anyone; a posted receipt is released after ${x.contestWindow} s, or at once if the seller's refund bond covers it.`, '');
-  out.push('| Endpoint | Data received in | Seller at fault | Agent | Escrow | Settled in |', '| --- | --- | --- | --- | --- | --- |');
-  for (const c of x.calls) out.push(`| \`${c.endpoint}\` | ${c.dataSeconds ?? '—'} s | ${c.providerAtFault ? `yes (${(c.codes ?? []).join(', ')})` : 'no'} | ${c.action ?? c.error ?? '—'}${c.tx ? ` ([tx](${c.tx}))` : ''} | **${c.held ?? '—'}** | ${c.settledSeconds ?? '—'} s |`);
-  out.push('');
+  out.push('| Endpoint | Paid response received | Seller at fault | Agent | Escrow | Released or refunded after the response |', '| --- | --- | --- | --- | --- | --- |');
+  for (const c of x.calls) out.push(`| \`${c.endpoint}\` | ${c.dataSeconds ?? '—'} s | ${c.providerAtFault ? `yes (${(c.codes ?? []).join(', ')})` : 'no'} | ${c.action ?? c.error ?? '—'}${c.tx ? ` ([tx](${c.tx}))` : ''} | **${c.held ?? '—'}** | ${c.escrowSeconds ?? '—'} s |`);
+  out.push('', 'The time to the paid response includes the x402 payment itself, which the facilitator settles on-chain before the seller answers, as with \`exact\`. The escrow step runs after the agent already has the data.', '');
 }
 if (r.prepaidLedger) {
   const p = r.prepaidLedger;
