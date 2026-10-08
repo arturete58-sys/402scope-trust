@@ -33,6 +33,8 @@ Part of the [402Scope observatory](https://402scope.org).
 | Who and how much: trust policy plus a spending limit on the same wallet (OpenZeppelin semantics, x402-compatible) | Working, 9 end-to-end tests — [docs/agent-wallet.md](docs/agent-wallet.md#who-and-how-much-trust-policy-plus-spending-limit) |
 | Passkey owner for agent wallets (WebAuthn verifier): the owner manages the budget with a passkey, the agent only pays | Working, tested — [docs/agent-wallet.md](docs/agent-wallet.md#the-owner-holds-a-passkey-the-agent-holds-a-key) |
 | Prepaid sellers (`batch-settlement`, e.g. Fermah Pay): probe, paid measurement from a prepaid balance, receipts signed by the ledger's seller role | Working, tested; seller role read on testnet each run — [docs/prepaid-ledgers.md](docs/prepaid-ledgers.md) |
+| Optional automatic refunds: seller bond, `x402-receipt/3` checked onchain, no admin | Working, 10 contract tests, same receipt hash in Rust, TypeScript and Python — [docs/refunds.md](docs/refunds.md) |
+| One package with an entry point per role (`/facilitator`, `/seller`, `/buyer`) | Working, tested |
 | Python verifier: receipts, evidence proofs, onchain quorum reads (`stellar-sdk` for Python) | Working, tested against the TypeScript vectors and each testnet deployment — [python/](python) |
 | Typed TypeScript clients for every contract, generated from the deployed wasm | Working — `import { clients } from '402scope-trust'`, [src/clients](src/clients) |
 | Any facilitator: trust hooks for `@x402/core` facilitators (flag or block), ranked Bazaar discovery, `/v1/sellers` API | Working, tested — [docs/facilitators.md](docs/facilitators.md) |
@@ -43,6 +45,16 @@ Part of the [402Scope observatory](https://402scope.org).
 | Stellar standards: SEP-41 payments and bonds, SEP-53 signed receipts and claims, SEP-10 facilitator login, SEP-1 attester identity, SEP-46/55 verified contract builds | Working — [docs/stellar-standards.md](docs/stellar-standards.md) |
 | Contributions from partner facilitators (their Bazaar and the resources they settle), with a contributor key or SEP-10 login | Working, tested — [docs/facilitators.md](docs/facilitators.md#share-your-bazaar) |
 | Dispute process for slashing, mainnet, audit | Next |
+
+## One package, three roles
+
+| You are | One call | What you get |
+| --- | --- | --- |
+| **Facilitator** | `scopeFacilitator(facilitator, { trust, mode, share?, refunds? })` from `402scope-trust/facilitator` | Trust hooks on verify and settle (flag or block), your Bazaar ranked by measured quality, refund-backed sellers labelled and ranked first, optional sharing of what you settle |
+| **Seller** | `scopeSeller({ secret, terms, refund? })` from `402scope-trust/seller` | Delivery terms in your 402 challenge, a signed receipt for every paid response, and an optional refund bond that refunds buyers automatically if you break your own terms |
+| **Buyer or agent** | `scopeFetch({ client, check?, refunds? })` from `402scope-trust/buyer` | A check before paying, a check of what was delivered after paying, and automatic refunds from sellers that offer them |
+
+Refunds are optional and run on a contract with no admin: [docs/refunds.md](docs/refunds.md).
 
 ## Quick start
 

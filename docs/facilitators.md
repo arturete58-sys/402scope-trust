@@ -10,6 +10,32 @@
 
 Attesters measure through whatever facilitator each seller uses, because they pay as an ordinary x402 client.
 
+## In one call
+
+```ts
+import { scopeFacilitator } from '402scope-trust/facilitator';
+
+const scope = scopeFacilitator(facilitator, {
+  trust: { chain },                       // or { apiUrl } or { check }
+  mode: 'flag',                           // 'block' refuses untrusted sellers
+  share: { apiUrl, key },                 // optional: get what you settle measured
+  refunds: { contract, rpcUrl, networkPassphrase, token: USDC }, // optional: label refund-backed sellers
+});
+const listing = await scope.rank(bazaarItems); // trusted and refund-backed sellers first
+```
+
+What a facilitator gains:
+
+| Need | What 402Scope gives |
+| --- | --- |
+| Know which sellers in its network misbehave | A verdict per seller on every verify and settle, flagged or blocked |
+| Hear first when a seller degrades | Alerts (`POST /v1/watch` on the observatory) |
+| A Bazaar that shows what works | Ranked discovery, with measured scores and a refund-backed label |
+| Stand out | Offer "refund if the seller breaks its terms" to buyers, backed by sellers' optional bonds ([refunds](refunds.md)) |
+| Prove its own reliability | Settlement latency measured by the observatory |
+
+The building blocks below remain available one by one.
+
 ## Trust hooks
 
 `@x402/core` facilitators expose `onBeforeVerify` and `onBeforeSettle` hooks that can abort. `withTrustHooks` uses them:
