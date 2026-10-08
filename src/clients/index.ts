@@ -11,3 +11,5 @@ export * as ed25519Verifier from './ed25519Verifier/index.js';
 export * as spendingLimit from './spendingLimit/index.js';
 /** WebAuthn (passkey) verifier for smart account signers. */
 export * as webauthnVerifier from './webauthnVerifier/index.js';
+/** Refund bond: optional seller bonds that refund payers automatically when a signed receipt shows a breach. */
+export * as refundBond from './refundBond/index.js';
