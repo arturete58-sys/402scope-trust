@@ -22,6 +22,7 @@ const CONTRACTS = [
   ['ed25519Verifier', 'scope_ed25519_verifier.wasm', 'Ed25519 verifier for the smart account signers'],
   ['spendingLimit', 'scope_spending_limit.wasm', 'Spending limit policy: at most an amount per rolling window, x402-compatible'],
   ['webauthnVerifier', 'scope_webauthn_verifier.wasm', 'WebAuthn (passkey) verifier for smart account signers'],
+  ['refundBond', 'scope_refund_bond.wasm', 'Refund bond: optional seller bonds that refund payers automatically when a signed receipt shows a breach'],
 ];
 
 const wasmDir = process.argv[2];

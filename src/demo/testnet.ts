@@ -52,6 +52,8 @@ import { deliveryReceipts } from '../receipts.js';
 import { declare, declareDeliveryTerms, declarationsResourceServerExtension, readTerms, type DeliveryTerms } from '../declarations.js';
 import { onchainSellerChecker, rankResources, withTrustHooks, type TrustDecision } from '../facilitator.js';
 import { prepaidSeller } from '../prepaid.js';
+import { bondOf, depositBond, withBondInfo } from '../refunds.js';
+import { scopeFetch, type DeliveryReport } from '../roles/buyer.js';
 import { NO_DECLARATIONS } from '../probe.js';
 import { scoreEndpoint } from '../score.js';
 import { sellerScores } from '../seller.js';
@@ -64,7 +66,8 @@ const NETWORK = 'stellar:testnet' as const;
 const PASS = Networks.TESTNET;
 const RPC = process.env.STELLAR_RPC_URL ?? TESTNET_RPC;
 const PRICE = '10000'; // 0.001 SCOPE (7 decimals)
-const BUDGET = 25_000n; // the budgeted wallet may spend 0.0025 SCOPE a day: two calls, not three
+const BUDGET = 25_000n;
+const SELLER_BOND = 100_000n; // 0.01 SCOPE: ten refunds of one call // the budgeted wallet may spend 0.0025 SCOPE a day: two calls, not three
 const UNIT = 10_000_000n; // 1 SCOPE
 const txUrl = (h: string) => `https://stellar.expert/explorer/testnet/tx/${h}`;
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -116,6 +119,7 @@ async function main(): Promise<void> {
   await classic(server, k.issuer, [
     Operation.payment({ destination: k.buyer1.publicKey(), asset, amount: '100' }),
     Operation.payment({ destination: k.buyer2.publicKey(), asset, amount: '100' }),
+    Operation.payment({ destination: k.sellerStale.publicKey(), asset, amount: '1' }),
     Operation.payment({ destination: k.attester1.publicKey(), asset, amount: '1000' }),
     Operation.payment({ destination: k.attester2.publicKey(), asset, amount: '1000' }),
   ]);
@@ -128,6 +132,11 @@ async function main(): Promise<void> {
   log('deploying the trust policy and the ed25519 verifier');
   const policy = await deployWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_trust_policy'), args: null });
   const verifier = await deployWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_ed25519_verifier'), args: null });
+  // Optional refunds: a bond contract with no admin. The stale seller opts in.
+  log('deploying the refund bond and the stale seller\'s bond');
+  const refundBond = await deployWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_refund_bond'), args: { notice_ledgers: 720, claim_window: 3600n } });
+  const bondCfg = { contract: refundBond, rpcUrl: RPC, networkPassphrase: PASS };
+  const bondDepositTx = await depositBond(bondCfg, { owner: k.sellerStale, signer: k.sellerStale.publicKey(), token, amount: SELLER_BOND });
   const attesters = [k.attester1.publicKey(), k.attester2.publicKey()];
   const policyParams = { registry, attesters, minScore: 80, quorum: 2, maxUnverified: 0n };
   log('deploying the agent wallet with the trust policy installed');
@@ -147,7 +156,7 @@ async function main(): Promise<void> {
   });
   await submit(server, PASS, k.issuer, Operation.invokeContractFunction({ contract: token, function: 'mint', args: [new Address(budgetWallet).toScVal(), nativeToScVal(10n * UNIT, { type: 'i128' })] }));
   const c = (id: string) => `https://stellar.expert/explorer/testnet/contract/${id}`;
-  out.contracts = { registry, policy, verifier, wallet, token, spendingLimit: limitPolicy, budgetWallet, webauthnVerifier, links: { registry: c(registry), policy: c(policy), wallet: c(wallet), token: c(token), spendingLimit: c(limitPolicy), budgetWallet: c(budgetWallet), webauthnVerifier: c(webauthnVerifier) } };
+  out.contracts = { registry, policy, verifier, wallet, token, spendingLimit: limitPolicy, budgetWallet, webauthnVerifier, refundBond, links: { refundBond: c(refundBond), registry: c(registry), policy: c(policy), wallet: c(wallet), token: c(token), spendingLimit: c(limitPolicy), budgetWallet: c(budgetWallet), webauthnVerifier: c(webauthnVerifier) } };
   out.policy = { attesters, minScore: 80, quorum: 2, maxUnverified: '0' };
   log('registry', registry, 'policy', policy, 'wallet', wallet);
 
@@ -189,17 +198,19 @@ async function main(): Promise<void> {
   };
   const resourceServer = new x402ResourceServer(facClient as never).register(NETWORK, new ServerScheme()).registerExtension(declarationsResourceServerExtension);
   const terms: DeliveryTerms = { version: 1, freshness: { maxAgeSeconds: 60, basis: 'live' }, provenance: { source: 'demo-feed' }, perResponse: true, onBreach: 'refund' };
+  const refundTerms: DeliveryTerms = { ...terms, refund: { contract: refundBond, network: NETWORK } };
   const accepts = (payTo: Keypair) => ({ scheme: 'exact', network: NETWORK, payTo: payTo.publicKey(), price: { amount: PRICE, asset: token } });
   const routes = {
     'GET /good': { accepts: accepts(k.sellerGood), description: 'Fast JSON quote', mimeType: 'application/json', extensions: declareDeliveryTerms(terms) },
     'GET /slow': { accepts: accepts(k.sellerGood), description: 'Slow JSON quote', mimeType: 'application/json', extensions: declareDeliveryTerms(terms) },
-    'GET /stale': { accepts: accepts(k.sellerStale), description: 'Promises data under 60 s old, serves 20-minute-old data', mimeType: 'application/json', extensions: declareDeliveryTerms(terms) },
+    'GET /stale': { accepts: accepts(k.sellerStale), description: 'Promises data under 60 s old, serves 20-minute-old data', mimeType: 'application/json', extensions: declareDeliveryTerms(refundTerms) },
     'GET /wrong-type': { accepts: accepts(k.sellerBad), description: 'Declares JSON, returns HTML', mimeType: 'application/json' },
     'GET /broken': { accepts: accepts(k.sellerBad), description: 'Always fails', mimeType: 'application/json' },
   };
   const app = express();
   app.use(['/good', '/slow'], deliveryReceipts({ secret: k.sellerGood.secret(), resourceUrl: (req) => `${base}${req.originalUrl}` }));
-  app.use('/stale', deliveryReceipts({ secret: k.sellerStale.secret(), resourceUrl: (req) => `${base}${req.originalUrl}` }));
+  // The stale seller backs its terms with the bond: x402-receipt/3, checkable by the contract.
+  app.use('/stale', deliveryReceipts({ secret: k.sellerStale.secret(), resourceUrl: (req) => `${base}${req.originalUrl}`, terms: refundTerms }));
   app.use(paymentMiddleware(routes as never, resourceServer));
   const fresh = { freshness: { ageSeconds: 2, isStale: false, basis: 'live' as const }, provenance: { source: 'demo-feed' } };
   app.get('/good', (_q, s) => { declare(s, fresh); s.json({ pair: 'XLM/USD', price: 0.42, at: new Date().toISOString() }); });
@@ -354,6 +365,25 @@ async function main(): Promise<void> {
   for (const name of ['good', 'broken']) { try { await guarded(`${base}/${name}`); } catch { /* refused */ } }
   out.guardDecisions = decisions;
 
+  // 6c. Automatic refunds: an agent with scopeFetch pays the stale seller, whose own signed
+  // receipt shows it broke its terms; the agent claims and the bond refunds it at once.
+  const reports: DeliveryReport[] = [];
+  const refundingAgent = scopeFetch({
+    client: x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new ClientScheme(createEd25519Signer(k.buyer2.secret(), NETWORK)) }], spendControls: false }),
+    refunds: { submitter: k.buyer2, rpcUrl: RPC, networkPassphrase: PASS },
+    onReport: (r) => reports.push(r),
+  });
+  const bondBefore = (await bondOf(bondCfg, k.sellerStale.publicKey(), token))?.balance ?? 0n;
+  for (const name of ['stale', 'good']) {
+    try { await refundingAgent(`${base}/${name}`); } catch (e) { reports.push({ url: `${base}/${name}`, status: 0, receipt: 'missing', providerAtFault: false, codes: [], refund: { outcome: 'failed', contract: refundBond, error: (e as Error).message.slice(0, 200) } }); }
+  }
+  const bondAfter = (await bondOf(bondCfg, k.sellerStale.publicKey(), token))?.balance ?? 0n;
+  out.refunds = {
+    contract: refundBond, bond: SELLER_BOND.toString(), depositTx: txUrl(bondDepositTx), bondBefore: bondBefore.toString(), bondAfter: bondAfter.toString(),
+    calls: reports.map((r) => ({ endpoint: r.url.replace(base, ''), receipt: r.receipt, providerAtFault: r.providerAtFault, codes: r.codes, refund: r.refund ? { ...r.refund, tx: r.refund.tx ? txUrl(r.refund.tx) : undefined } : null })),
+  };
+  log('refunds', JSON.stringify(out.refunds));
+
   // 7. Any facilitator: trust hooks on the facilitator, and a ranked Bazaar listing
   enforce = true;
   const plain = wrapFetchWithPayment(fetch, x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new ClientScheme(createEd25519Signer(k.buyer2.secret(), NETWORK)) }], spendControls: false }));
@@ -368,7 +398,7 @@ async function main(): Promise<void> {
   }
   out.facilitatorHooks = { mode: 'block', payments: facilitatorPayments, decisions: facilitatorDecisions.map((d) => ({ seller: sellerLabel(d.payTo), action: d.action, score: d.verdict?.score ?? null, reason: d.verdict?.reason ?? d.error })) };
   const listing = names.map((name) => ({ resource: `${base}/${name}`, accepts: [{ network: NETWORK, payTo: stores[0].get(`${base}/${name}`)!.payTo! }] }));
-  out.rankedDiscovery = (await rankResources(listing, onchainCheck)).map((it) => ({ endpoint: String(it.resource).replace(base, ''), trusted: it.trust?.trusted ?? null, score: it.trust?.score ?? null }));
+  out.rankedDiscovery = (await rankResources(listing, withBondInfo(onchainCheck, { ...bondCfg, token }))).map((it) => ({ endpoint: String(it.resource).replace(base, ''), trusted: it.trust?.trusted ?? null, score: it.trust?.score ?? null, bonded: it.trust?.bonded ?? false }));
 
   // 8. OpenZeppelin's Built on Stellar facilitator as a drop-in (testnet key from its public generator)
   out.openzeppelin = await tryOpenZeppelin({ server, token, sellerGood: k.sellerGood, buyer: k.buyer1, wallet, agentKey, verifier });
@@ -404,10 +434,13 @@ async function main(): Promise<void> {
   const badRefused = walletPayments.slice(1).every((p) => String(p.outcome).startsWith('refused'));
   const facOk = facilitatorPayments[0]?.outcome === 'paid' && facilitatorPayments[1]?.outcome !== 'paid';
   const o = budgetPayments.map((p) => String(p.outcome));
+  const rf = (out.refunds as { calls: { endpoint: string; refund: { outcome: string } | null }[] }).calls;
+  const refundOk = rf.find((c) => c.endpoint === '/stale')?.refund?.outcome === 'refunded' && !rf.find((c) => c.endpoint === '/good')?.refund;
+  if (!refundOk) log('refund expectations not met', JSON.stringify(rf));
   const budgetOk = o[0] === 'refused by the wallet: seller not trusted' && o[1] === 'paid' && o[2] === 'paid' && o[3] === 'refused by the wallet: over the spending limit' && owner.raised === true && (owner.paymentAfter as { outcome?: string } | undefined)?.outcome === 'paid';
   if (!budgetOk) log('budgeted wallet expectations not met', JSON.stringify(budgetPayments.map((p) => ({ outcome: p.outcome, facilitator: p.facilitator, reason: String(p.reason ?? '').slice(0, 160) }))));
-  if (!goodPaid || !badRefused || !facOk || !budgetOk || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
-    throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused} facilitatorHooks=${facOk} budget=${o.join(',')}`);
+  if (!goodPaid || !badRefused || !facOk || !budgetOk || !refundOk || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
+    throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused} facilitatorHooks=${facOk} budget=${o.join(',')} refund=${refundOk}`);
   }
 }
 

@@ -243,6 +243,49 @@ test('a declaration is signed with the receipt, and a seller breaking its own te
   }
 });
 
+test('scopeSeller: terms, declarations and v3 receipts a refund bond can check; only real breaches are claimable', async () => {
+  const { default: express } = await import('express');
+  const { scopeSeller } = await import('../roles/seller.js');
+  const { decodeReceipt, verifyReceipt, RECEIPT_HEADER, RECEIPT_VERSION_3 } = await import('../receipts.js');
+  const { claimable } = await import('../refunds.js');
+  const { DECLARATION_HEADER, validateTerms } = await import('../declarations.js');
+  const seller = Keypair.random();
+  const buyer = Keypair.random().publicKey();
+  const BOND = 'CD3GESMYMJ3MNWNSKS6P7TEDHL5HYEWSGTFX7A3ENDB5MXTQ5TED7PSI';
+  const scope = scopeSeller({ secret: seller.secret(), terms: { version: 1, freshness: { maxAgeSeconds: 60 }, perResponse: true }, refund: { contract: BOND, rpcUrl: 'http://unused', networkPassphrase: 'Test SDF Network ; September 2015' } });
+  assert.deepEqual(scope.terms.refund, { contract: BOND, network: 'stellar:testnet' });
+  assert.equal(scope.terms.onBreach, 'refund');
+  assert.deepEqual(validateTerms(scope.terms), []);
+  assert.ok(scope.bond);
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64');
+  const app = express();
+  app.use(...scope.middleware);
+  // Stands in for the x402 middleware, which reports the settlement.
+  app.use((_q: any, s: any, next: any) => { s.setHeader('PAYMENT-RESPONSE', b64({ success: true, payer: buyer, transaction: 'tx' })); next(); });
+  app.get('/fresh', (_q: any, s: any) => { s.declare({ freshness: { ageSeconds: 5, isStale: false } }); s.json({ price: 1 }); });
+  app.get('/stale', (_q: any, s: any) => { s.declare({ freshness: { ageSeconds: 1200, isStale: false } }); s.json({ price: 1 }); });
+  const h = await new Promise<http.Server>((ok) => { const x = app.listen(0, '127.0.0.1', () => ok(x)); });
+  const base = `http://127.0.0.1:${(h.address() as { port: number }).port}`;
+  const pay = b64({ x402Version: 2, accepted: { scheme: 'exact', network: 'stellar:testnet', payTo: seller.publicKey(), asset: USDC_TESTNET_ADDRESS, amount: '10000' }, payload: {} });
+  const get = async (p: string) => {
+    const r = await fetch(`${base}${p}`, { headers: { 'PAYMENT-SIGNATURE': pay } });
+    const body = Buffer.from(await r.arrayBuffer());
+    return { body, decl: r.headers.get(DECLARATION_HEADER), rec: decodeReceipt(r.headers.get(RECEIPT_HEADER)) };
+  };
+  try {
+    const stale = await get('/stale');
+    assert.equal(stale.rec?.v, RECEIPT_VERSION_3);
+    assert.deepEqual([stale.rec?.payer, stale.rec?.amount, stale.rec?.age, stale.rec?.maxAge, stale.rec?.unusable], [buyer, '10000', 1200, 60, false]);
+    assert.equal(verifyReceipt(stale.rec, { paymentHeader: pay, body: stale.body, payTo: seller.publicKey(), declaration: stale.decl }), 'valid');
+    assert.ok(claimable(stale.rec));
+    const fresh = await get('/fresh');
+    assert.equal(verifyReceipt(fresh.rec, { paymentHeader: pay, body: fresh.body, payTo: seller.publicKey(), declaration: fresh.decl }), 'valid');
+    assert.ok(!claimable(fresh.rec));
+  } finally {
+    h.close();
+  }
+});
+
 test('trust hooks work on a standard @x402/core facilitator, and discovery from any facilitator gets ranked', async () => {
   const { x402Facilitator } = await import('@x402/core/facilitator');
   const { createEd25519Signer } = await import('@x402/stellar');

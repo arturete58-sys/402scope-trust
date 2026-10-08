@@ -1410,6 +1410,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "scope-refund-bond"
+version = "0.2.0"
+dependencies = [
+ "ed25519-dalek",
+ "sha2",
+ "soroban-sdk",
+ "stellar-accounts",
+]
+
+[[package]]
 name = "scope-spending-limit"
 version = "0.2.0"
 dependencies = [

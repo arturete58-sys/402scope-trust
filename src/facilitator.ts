@@ -32,6 +32,10 @@ export interface SellerVerdict {
   score: number | null;
   source: 'onchain' | 'api' | 'local';
   reason?: string;
+  /** The seller backs its terms with a refund bond (see refunds.ts `withBondInfo`). */
+  bonded?: boolean;
+  /** Bond balance in token base units. */
+  bond?: string;
 }
 
 export type SellerChecker = (payTo: string, network: string) => Promise<SellerVerdict>;
@@ -175,7 +179,8 @@ export async function rankResources<T extends DiscoveryItem>(items: T[], check: 
     if (opt) trust = await check(opt.payTo!, opt.network!).catch(() => null);
     return { it: { ...it, trust }, i };
   }));
-  const rank = (t: SellerVerdict | null) => (t?.trusted ? 2 : t?.score != null ? 1 : 0);
+  // Trusted and refund-backed first, then trusted, then scored, then unknown.
+  const rank = (t: SellerVerdict | null) => (t?.trusted ? (t.bonded ? 3 : 2) : t?.score != null ? 1 : 0);
   out.sort((a, b) => rank(b.it.trust) - rank(a.it.trust) || (b.it.trust?.score ?? -1) - (a.it.trust?.score ?? -1) || a.i - b.i);
   return out.map((x) => x.it);
 }

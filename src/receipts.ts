@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { Keypair } from '@stellar/stellar-sdk';
+import { Address, Keypair, nativeToScVal, xdr } from '@stellar/stellar-sdk';
 import type { NextFunction, Request, Response } from 'express';
-import { DECLARATION_HEADER } from './declarations.js';
+import { checkDelivery, DECLARATION_HEADER, type DeliveryTerms } from './declarations.js';
 
 /**
  * x402 delivery receipts on Stellar (draft extension "x402-receipt/2", signed
@@ -24,9 +24,17 @@ export const RECEIPT_HEADER = 'X-402-Receipt';
 export const RECEIPT_VERSION = 'x402-receipt/2';
 /** Legacy version: raw ed25519 over the message. Still verified. */
 export const RECEIPT_VERSION_1 = 'x402-receipt/1';
+/**
+ * Checkable onchain: also binds payer, payTo, asset, amount, the declared age,
+ * the promised maximum and whether the seller marked the response unusable, so
+ * the refund bond contract can verify it and refund the payer (see refunds.ts).
+ */
+export const RECEIPT_VERSION_3 = 'x402-receipt/3';
+/** Age value meaning "not declared" in a v3 receipt. */
+export const NO_AGE = 0xffffffff;
 
 export interface Receipt {
-  v: typeof RECEIPT_VERSION | typeof RECEIPT_VERSION_1;
+  v: typeof RECEIPT_VERSION | typeof RECEIPT_VERSION_1 | typeof RECEIPT_VERSION_3;
   /** Resource URL as the seller served it. */
   resource: string;
   /** sha256 (hex) of the PAYMENT-SIGNATURE header value the buyer sent. */
@@ -46,6 +54,26 @@ export interface Receipt {
    * v1: raw over receiptMessage(...).
    */
   sig: string;
+  /** v3 only: who paid, whom, in which token and how much (base units, as a string). */
+  payer?: string;
+  payTo?: string;
+  asset?: string;
+  amount?: string;
+  /** v3 only: the data's age the seller declared (null if none), the maximum it promised (0 if none), and whether it marked the response unusable. */
+  age?: number | null;
+  maxAge?: number;
+  unusable?: boolean;
+}
+
+/** The v3 facts beyond v2. */
+export interface ReceiptFacts {
+  payer: string;
+  payTo: string;
+  asset: string;
+  amount: string | bigint;
+  age: number | null;
+  maxAge: number;
+  unusable: boolean;
 }
 
 export type ReceiptCheck = 'valid' | 'unbound' | 'invalid' | 'missing';
@@ -55,6 +83,61 @@ export const sha256hex = (b: Uint8Array | string) => createHash('sha256').update
 /** The message that is signed (for v2, the SEP-53 message). */
 export function receiptMessage(r: Pick<Receipt, 'resource' | 'payment' | 'body' | 'at' | 'decl'> & { v?: Receipt['v'] }): Buffer {
   return Buffer.from(`${r.v ?? RECEIPT_VERSION}\n${r.resource}\n${r.payment}\n${r.body}\n${r.at}${r.decl ? `\n${r.decl}` : ''}`, 'utf8');
+}
+
+const sym = (k: string) => xdr.ScVal.scvSymbol(k);
+const b32 = (hex: string) => xdr.ScVal.scvBytes(Buffer.from(hex, 'hex'));
+
+/** XDR of the contract's `Receipt` struct (fields in the order Soroban sorts them). */
+export function receiptStructXdr(r: Receipt): Buffer {
+  return receiptStructScVal(r).toXDR();
+}
+
+/** The contract's `Receipt` struct as an ScVal, for a `claim` call. */
+export function receiptStructScVal(r: Receipt): xdr.ScVal {
+  const f: Record<string, xdr.ScVal> = {
+    age: xdr.ScVal.scvU32(r.age === null || r.age === undefined ? NO_AGE : r.age),
+    amount: nativeToScVal(BigInt(r.amount ?? 0), { type: 'i128' }),
+    asset: new Address(r.asset!).toScVal(),
+    at: xdr.ScVal.scvU64(new xdr.Uint64(BigInt(r.at))),
+    body: b32(r.body),
+    decl: b32(r.decl ?? '0'.repeat(64)),
+    max_age: xdr.ScVal.scvU32(r.maxAge ?? 0),
+    pay_to: new Address(r.payTo!).toScVal(),
+    payer: new Address(r.payer!).toScVal(),
+    payment: b32(r.payment),
+    resource: b32(sha256hex(r.resource)),
+    unusable: xdr.ScVal.scvBool(!!r.unusable),
+  };
+  return xdr.ScVal.scvMap(Object.keys(f).sort().map((k) => new xdr.ScMapEntry({ key: sym(k), val: f[k] })));
+}
+
+/** The v3 message: the version line and the hex sha256 of the struct's XDR. */
+export function receiptMessageV3(r: Receipt): Buffer {
+  return Buffer.from(`${RECEIPT_VERSION_3}\n${sha256hex(receiptStructXdr(r))}`, 'utf8');
+}
+
+/** The SEP-53 hash a v3 receipt's signature covers (what the contract checks). */
+export function receiptHashV3(r: Receipt): Buffer {
+  return createHash('sha256').update(Buffer.concat([Buffer.from('Stellar Signed Message:\n'), receiptMessageV3(r)])).digest();
+}
+
+/** Whether a v3 receipt shows the seller broke its own terms (the contract's rule). */
+export function receiptShowsBreach(r: Receipt): boolean {
+  if (r.v !== RECEIPT_VERSION_3) return false;
+  const age = r.age === null || r.age === undefined ? NO_AGE : r.age;
+  return !!r.unusable || ((r.maxAge ?? 0) > 0 && age !== NO_AGE && age > (r.maxAge ?? 0));
+}
+
+/** Signs a v3 receipt: what was delivered, for which payment, and the facts a refund contract needs. */
+export function signReceiptV3(secret: string, p: { resource: string; paymentHeader: string; body: Uint8Array | string; at?: number; declaration?: string | null } & ReceiptFacts): Receipt {
+  const kp = Keypair.fromSecret(secret);
+  const r: Receipt = {
+    v: RECEIPT_VERSION_3, ...receiptBase(p), signer: kp.publicKey(), sig: '',
+    payer: p.payer, payTo: p.payTo, asset: p.asset, amount: String(p.amount), age: p.age, maxAge: p.maxAge, unusable: p.unusable,
+  };
+  r.sig = kp.signMessage(receiptMessageV3(r)).toString('base64');
+  return r;
 }
 
 type ReceiptBase = Pick<Receipt, 'resource' | 'payment' | 'body' | 'at' | 'decl'>;
@@ -85,7 +168,7 @@ export function decodeReceipt(header: string | null | undefined): Receipt | null
   if (!header) return null;
   try {
     const r = JSON.parse(Buffer.from(header, 'base64url').toString('utf8'));
-    return r && (r.v === RECEIPT_VERSION || r.v === RECEIPT_VERSION_1) ? (r as Receipt) : null;
+    return r && (r.v === RECEIPT_VERSION || r.v === RECEIPT_VERSION_1 || r.v === RECEIPT_VERSION_3) ? (r as Receipt) : null;
   } catch {
     return null;
   }
@@ -106,7 +189,7 @@ export function verifyReceipt(r: Receipt | null, expect: { paymentHeader: string
     if ((r.decl ?? null) !== (expect.declaration ? sha256hex(expect.declaration) : null)) return 'invalid';
     const kp = Keypair.fromPublicKey(r.signer);
     const sig = Buffer.from(r.sig, 'base64');
-    const ok = r.v === RECEIPT_VERSION_1 ? kp.verify(receiptMessage(r), sig) : kp.verifyMessage(receiptMessage(r), sig);
+    const ok = r.v === RECEIPT_VERSION_1 ? kp.verify(receiptMessage(r), sig) : r.v === RECEIPT_VERSION_3 ? kp.verifyMessage(receiptMessageV3(r), sig) : kp.verifyMessage(receiptMessage(r), sig);
     if (!ok) return 'invalid';
     // The payTo, or a key bound to it (e.g. the seller role of a prepaid ledger contract, see prepaid.ts).
     return (expect.payTo && expect.payTo === r.signer) || (expect.signers ?? []).includes(r.signer) ? 'valid' : 'unbound';
@@ -121,7 +204,16 @@ export function verifyReceipt(r: Receipt | null, expect: { paymentHeader: string
  * succeeds (2xx), it hashes the exact body sent and adds the signed
  * `X-402-Receipt` header.
  */
-export function deliveryReceipts(opts: { secret: string; resourceUrl?: (req: Request) => string }) {
+export function deliveryReceipts(opts: {
+  secret: string;
+  resourceUrl?: (req: Request) => string;
+  /**
+   * The delivery terms this seller published. With them, receipts are
+   * x402-receipt/3 and carry the facts a refund bond checks onchain (declared
+   * age against the promised maximum, unusable responses). Without them, v2.
+   */
+  terms?: DeliveryTerms | null;
+}) {
   return (req: Request, res: Response, next: NextFunction) => {
     const paymentHeader = req.header('PAYMENT-SIGNATURE') ?? req.header('X-PAYMENT');
     if (!paymentHeader) return next();
@@ -143,7 +235,9 @@ export function deliveryReceipts(opts: { secret: string; resourceUrl?: (req: Req
       if (res.statusCode >= 200 && res.statusCode < 300 && !res.headersSent) {
         const resource = opts.resourceUrl ? opts.resourceUrl(req) : `${req.protocol}://${req.get('host')}${req.originalUrl}`;
         const declaration = res.getHeader(DECLARATION_HEADER);
-        res.setHeader(RECEIPT_HEADER, encodeReceipt(signReceipt(opts.secret, { resource, paymentHeader, body, declaration: typeof declaration === 'string' ? declaration : null })));
+        const decl = typeof declaration === 'string' ? declaration : null;
+        const facts = opts.terms ? receiptFacts(paymentHeader, res.getHeader('PAYMENT-RESPONSE'), resource, opts.terms, decl) : null;
+        res.setHeader(RECEIPT_HEADER, encodeReceipt(facts ? signReceiptV3(opts.secret, { resource, paymentHeader, body, declaration: decl, ...facts }) : signReceipt(opts.secret, { resource, paymentHeader, body, declaration: decl })));
       }
       if (!res.headersSent) res.setHeader('content-length', String(body.length));
       if (body.length) write(body);
@@ -151,5 +245,37 @@ export function deliveryReceipts(opts: { secret: string; resourceUrl?: (req: Req
       return end(done as () => void);
     }) as Response['end'];
     next();
+  };
+}
+
+const b64json = (v: unknown): Record<string, any> | null => {
+  try {
+    return typeof v === 'string' ? JSON.parse(Buffer.from(v, 'base64').toString('utf8')) : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The v3 facts for one paid response: what was paid (from the payment the
+ * buyer sent and the settlement the x402 middleware reported) and what the
+ * seller declared about the response, read against its own terms.
+ * Null when the payment cannot be read (the receipt then falls back to v2).
+ */
+export function receiptFacts(paymentHeader: string, settlementHeader: unknown, resource: string, terms: DeliveryTerms, declaration: string | null): ReceiptFacts | null {
+  const payment = b64json(paymentHeader);
+  const settlement = b64json(settlementHeader);
+  const accepted = payment?.accepted ?? payment?.paymentRequirements;
+  const payer: string | undefined = settlement?.payer ?? payment?.payload?.payer;
+  if (!accepted?.payTo || !accepted?.asset || !accepted?.amount || !payer) return null;
+  const d = checkDelivery({ url: resource, terms, header: declaration });
+  return {
+    payer,
+    payTo: accepted.payTo,
+    asset: accepted.asset,
+    amount: String(accepted.amount),
+    age: typeof d.declaration.freshness?.ageSeconds === 'number' ? Math.max(0, Math.min(0xfffffffe, Math.round(d.declaration.freshness.ageSeconds))) : null,
+    maxAge: terms.freshness?.maxAgeSeconds ?? 0,
+    unusable: d.codes.includes('DECLARED_UNUSABLE') || d.codes.includes('BREAKS_TERMS'),
   };
 }

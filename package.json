@@ -1,6 +1,6 @@
 {
   "name": "402scope-trust",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Verification layer for x402 on Stellar: measure endpoints, attest onchain, check before paying.",
   "license": "Apache-2.0",
   "type": "module",
@@ -43,5 +43,24 @@
     "@x402/paywall": "^2.28.0",
     "express": "^5.2.1",
     "typescript": "^5.9.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./facilitator": {
+      "types": "./dist/roles/facilitator.d.ts",
+      "default": "./dist/roles/facilitator.js"
+    },
+    "./seller": {
+      "types": "./dist/roles/seller.d.ts",
+      "default": "./dist/roles/seller.js"
+    },
+    "./buyer": {
+      "types": "./dist/roles/buyer.d.ts",
+      "default": "./dist/roles/buyer.js"
+    },
+    "./package.json": "./package.json"
   }
 }

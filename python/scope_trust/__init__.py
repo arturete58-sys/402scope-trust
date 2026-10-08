@@ -9,12 +9,12 @@
   ``get_seller``...) by simulation, without a funded account.
 - ``decision``: the observatory's sell / sell_and_warn / hold verdict.
 """
-from .receipts import RECEIPT_HEADER, RECEIPT_VERSION, RECEIPT_VERSION_1, decode_receipt, receipt_message, sign_receipt, verify_receipt
+from .receipts import RECEIPT_HEADER, RECEIPT_VERSION, RECEIPT_VERSION_1, RECEIPT_VERSION_3, decode_receipt, receipt_message, receipt_message_v3, receipt_shows_breach, sign_receipt, verify_receipt
 from .evidence import build_root, evidence_leaf, proof_for, verify_proof
 from .chain import Registry
 from .observatory import decision
 
 __all__ = [
-    "RECEIPT_HEADER", "RECEIPT_VERSION", "RECEIPT_VERSION_1", "decode_receipt", "receipt_message", "sign_receipt", "verify_receipt",
+    "RECEIPT_HEADER", "RECEIPT_VERSION", "RECEIPT_VERSION_1", "RECEIPT_VERSION_3", "receipt_message_v3", "receipt_shows_breach", "decode_receipt", "receipt_message", "sign_receipt", "verify_receipt",
     "build_root", "evidence_leaf", "proof_for", "verify_proof", "Registry", "decision",
 ]

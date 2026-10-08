@@ -241,3 +241,48 @@ test('batch-settlement (prepaid ledgers): commitment text, SEP-53 signature, req
   assert.equal(verifyReceipt(r, { paymentHeader: 'hdr', body: 'ok', payTo: LEDGER, signers: [LEDGER, seller.publicKey()] }), 'valid');
   assert.equal(verifyReceipt(r, { paymentHeader: 'hdr', body: 'ok', payTo: LEDGER, signers: [LEDGER, Keypair.random().publicKey()] }), 'unbound');
 });
+
+test('receipt v3: same hash as the refund bond contract, breach rule, verification', async () => {
+  const { Keypair } = await import('@stellar/stellar-sdk');
+  const { receiptHashV3, receiptShowsBreach, signReceiptV3, verifyReceipt, RECEIPT_VERSION_3 } = await import('../receipts.js');
+  // Same receipt as contracts/refund-bond receipt_hash_test_vector.
+  const r = {
+    v: RECEIPT_VERSION_3, resource: 'https://api.example.com/paid', payment: '02'.repeat(32), body: '03'.repeat(32), at: 1_800_000_000,
+    signer: '', sig: '', payer: 'GD3YDFNZ5XWLBEGSYMKVU645MPEB3W67ORQUUBROZYYAI47KRBJQHF34', payTo: 'GDLT7M7IAMPMGMDOQ2C6XOKTBLZ7Q7AXEZ6WFWRFKIMTGPOCPAN4EVYN',
+    asset: 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA', amount: '10000', age: 1200, maxAge: 60, unusable: false,
+  } as const;
+  assert.equal(receiptHashV3(r as never).toString('hex'), '9a208ff86120877882e0e34cd68b79ccd86b32a2c73ec9d2acb961b49bbbff8c');
+  assert.ok(receiptShowsBreach(r as never));
+  assert.ok(!receiptShowsBreach({ ...r, age: 30 } as never));
+  assert.ok(!receiptShowsBreach({ ...r, age: null } as never));
+  assert.ok(receiptShowsBreach({ ...r, age: null, unusable: true } as never));
+
+  const seller = Keypair.random();
+  const facts = { payer: r.payer, payTo: seller.publicKey(), asset: r.asset, amount: 10_000n, age: 1200, maxAge: 60, unusable: false };
+  const v3 = signReceiptV3(seller.secret(), { resource: 'https://s.example/q', paymentHeader: 'hdr', body: 'ok', declaration: 'decl', ...facts });
+  assert.equal(verifyReceipt(v3, { paymentHeader: 'hdr', body: 'ok', payTo: seller.publicKey(), declaration: 'decl' }), 'valid');
+  assert.equal(verifyReceipt({ ...v3, age: 30 }, { paymentHeader: 'hdr', body: 'ok', payTo: seller.publicKey(), declaration: 'decl' }), 'invalid');
+  assert.equal(verifyReceipt({ ...v3, amount: '1' }, { paymentHeader: 'hdr', body: 'ok', payTo: seller.publicKey(), declaration: 'decl' }), 'invalid');
+});
+
+test('scopeFacilitator: hooks on verify and settle, flag by default, refund-backed sellers ranked first', async () => {
+  const { scopeFacilitator } = await import('../roles/facilitator.js');
+  const hooks: ((ctx: unknown) => Promise<unknown>)[] = [];
+  const fac = { onBeforeVerify: (h: never) => hooks.push(h), onBeforeSettle: (h: never) => hooks.push(h) };
+  const verdicts: Record<string, { trusted: boolean; score: number | null; source: 'local'; bonded?: boolean }> = {
+    GOOD: { trusted: true, score: 90, source: 'local' },
+    BONDED: { trusted: true, score: 85, source: 'local', bonded: true },
+    BAD: { trusted: false, score: 20, source: 'local' },
+  };
+  const decisions: string[] = [];
+  const scope = scopeFacilitator(fac, { trust: { check: async (p) => verdicts[p] }, onDecision: (d) => decisions.push(`${d.payTo}:${d.action}`) });
+  assert.equal(hooks.length, 2);
+  assert.equal(await hooks[0]({ requirements: { payTo: 'BAD', network: 'stellar:testnet' } }), undefined); // flag never blocks
+  assert.deepEqual(decisions, ['BAD:flagged']);
+  const ranked = await scope.rank(['BAD', 'GOOD', 'BONDED'].map((p) => ({ resource: `https://${p}.example`, accepts: [{ network: 'stellar:testnet', payTo: p }] })));
+  assert.deepEqual(ranked.map((r) => r.accepts![0].payTo), ['BONDED', 'GOOD', 'BAD']);
+  const blocking = scopeFacilitator({ onBeforeVerify: (h: never) => hooks.push(h), onBeforeSettle: () => 0 }, { trust: { check: async (p) => verdicts[p] }, mode: 'block' });
+  assert.deepEqual(await hooks[2]({ requirements: { payTo: 'BAD', network: 'stellar:testnet' } }), { abort: true, reason: 'untrusted_seller' });
+  await blocking.stop();
+  await scope.stop();
+});

@@ -53,6 +53,12 @@ export interface DeliveryTerms {
   onBreach?: 'refund' | 'retry' | 'none';
   /** Where a buyer claims a refund (URL or email). */
   refundContact?: string;
+  /**
+   * Optional automatic refunds: the seller's bond in a 402Scope refund bond
+   * contract. A buyer holding a signed receipt (x402-receipt/3) that shows a
+   * breach claims there and is refunded in the same transaction.
+   */
+  refund?: { contract: string; network: string };
 }
 
 /** What the seller states about one response (normalised x402-declarations schema). */
@@ -75,6 +81,7 @@ export const TERMS_SCHEMA = {
     perResponse: { type: 'boolean' },
     onBreach: { enum: ['refund', 'retry', 'none'] },
     refundContact: { type: 'string' },
+    refund: { type: 'object', properties: { contract: { type: 'string' }, network: { type: 'string' } }, required: ['contract', 'network'] },
   },
 } as const;
 
@@ -92,6 +99,7 @@ export function validateTerms(t: unknown): string[] {
   if (o.quality?.established !== undefined && typeof o.quality.established !== 'boolean') p.push('quality.established must be a boolean');
   if (o.provenance?.source !== undefined && typeof o.provenance.source !== 'string') p.push('provenance.source must be a string');
   if (o.onBreach !== undefined && !['refund', 'retry', 'none'].includes(o.onBreach)) p.push('onBreach must be refund, retry or none');
+  if (o.refund !== undefined && !(/^C[A-Z2-7]{55}$/.test(o.refund?.contract ?? '') && /^stellar:/.test(o.refund?.network ?? ''))) p.push('refund must be { contract: C..., network: stellar:... }');
   return p;
 }
 

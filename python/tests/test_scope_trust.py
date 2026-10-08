@@ -67,3 +67,18 @@ def test_registry_values_decode():
     att = scval.to_map({scval.to_symbol("score"): scval.to_uint32(95), scval.to_symbol("evidence"): scval.to_bytes(b"\x01" * 32)})
     out = _native(att)
     assert out["score"] == 95 and out["evidence"] == b"\x01" * 32
+
+
+def test_receipt_v3_hash_matches_the_contract():
+    import hashlib
+    from scope_trust import receipt_message_v3, receipt_shows_breach
+    # Same receipt as contracts/refund-bond receipt_hash_test_vector.
+    r = {
+        "v": "x402-receipt/3", "resource": "https://api.example.com/paid", "payment": "02" * 32, "body": "03" * 32, "at": 1_800_000_000,
+        "payer": "GD3YDFNZ5XWLBEGSYMKVU645MPEB3W67ORQUUBROZYYAI47KRBJQHF34", "payTo": "GDLT7M7IAMPMGMDOQ2C6XOKTBLZ7Q7AXEZ6WFWRFKIMTGPOCPAN4EVYN",
+        "asset": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA", "amount": "10000", "age": 1200, "maxAge": 60, "unusable": False,
+    }
+    h = hashlib.sha256(b"Stellar Signed Message:\n" + receipt_message_v3(r)).hexdigest()
+    assert h == "9a208ff86120877882e0e34cd68b79ccd86b32a2c73ec9d2acb961b49bbbff8c"
+    assert receipt_shows_breach(r)
+    assert not receipt_shows_breach(dict(r, age=30))

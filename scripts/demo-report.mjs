@@ -35,6 +35,7 @@ if (c.budgetWallet) {
   out.push(`| Spending limit policy (rolling window, x402-compatible) | ${con(c.spendingLimit)} |`);
   out.push(`| Budgeted agent wallet (trust policy + spending limit, payments in SCOPE only; owner rule signed by a passkey) | ${con(c.budgetWallet)} |`);
   if (c.webauthnVerifier) out.push(`| WebAuthn (passkey) verifier | ${con(c.webauthnVerifier)} |`);
+  if (c.refundBond) out.push(`| Refund bond (optional seller bonds, no admin) | ${con(c.refundBond)} |`);
 }
 out.push(`| ed25519 verifier | ${con(c.verifier)} |`);
 out.push(`| Test token SCOPE (SEP-41) | ${con(c.token)} |`, '');
@@ -128,6 +129,15 @@ if (r.openzeppelin) {
     for (const p of z.payments ?? []) out.push(`| ${p.asset ?? 'SCOPE'} | ${p.payer} | **${p.outcome}** | ${p.tx ? `[settlement](${p.tx})` : why(p)} |`);
     out.push('');
   }
+}
+if (r.refunds) {
+  const f = r.refunds;
+  const units = (x) => (Number(x) / 1e7).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  out.push('## Automatic refunds (optional seller bond)', '');
+  out.push(`The stale seller opted in: it locked ${units(f.bond)} SCOPE in the refund bond ${con(f.contract)} ([deposit](${f.depositTx})), a contract with no admin, and added \`refund\` to the terms in its 402 challenge. An agent using \`scopeFetch\` then paid two endpoints:`, '');
+  out.push('| Endpoint | Receipt | Seller at fault | Refund |', '| --- | --- | --- | --- |');
+  for (const c of f.calls) out.push(`| \`${c.endpoint}\` | ${c.receipt} | ${c.providerAtFault ? `yes (${c.codes.join(', ')})` : 'no'} | ${c.refund ? `**${c.refund.outcome}**${c.refund.tx ? ` ([tx](${c.refund.tx}))` : ''}${c.refund.error ? ` ${c.refund.error.slice(0, 120)}` : ''}` : 'none needed'} |`);
+  out.push('', `The seller's own x402-receipt/3, a SEP-53 signature over the payment, the declared age (1,200 s) and the maximum it promised (60 s), was the proof: the contract checked it and refunded the payer in the same transaction. Bond before: ${units(f.bondBefore)} SCOPE, after: ${units(f.bondAfter)} SCOPE.`, '');
 }
 if (r.prepaidLedger) {
   const p = r.prepaidLedger;
