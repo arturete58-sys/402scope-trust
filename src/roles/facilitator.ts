@@ -3,6 +3,8 @@ import { resourceSharer } from '../contributions.js';
 import { apiSellerChecker, cached, discoveryProxy, onchainSellerChecker, rankResources, withTrustHooks, type HookableFacilitator, type SellerChecker, type TrustDecision } from '../facilitator.js';
 import { withBondInfo, type BondConfig } from '../refunds.js';
 import type { ChainConfig } from '../chain.js';
+import type { Keypair } from '@stellar/stellar-sdk';
+import { EscrowStellarFacilitatorScheme, escrowKeeper } from '../escrow.js';
 
 /**
  * 402Scope for facilitators, in one call:
@@ -27,6 +29,11 @@ export interface FacilitatorOptions {
   refunds?: BondConfig & { token: string; minBond?: bigint };
   onDecision?: (d: TrustDecision) => void;
   cacheMs?: number;
+  /**
+   * Optional: settle the `escrow` scheme and keep it moving. `scope.escrowScheme(signer)`
+   * returns the scheme to register; a keeper releases and refunds what is due.
+   */
+  escrow?: { submitter: Keypair; rpcUrl: string; networkPassphrase: string; intervalMs?: number; maxTransactionFeeStroops?: number };
 }
 
 export function scopeFacilitator<F extends HookableFacilitator>(fac: F, o: FacilitatorOptions) {
@@ -35,6 +42,8 @@ export function scopeFacilitator<F extends HookableFacilitator>(fac: F, o: Facil
   check = cached(check, o.cacheMs);
   const sharer = o.share ? resourceSharer({ apiUrl: o.share.apiUrl, key: o.share.key }) : undefined;
   withTrustHooks(fac, { check, mode: o.mode ?? 'flag', failClosed: o.failClosed, onDecision: o.onDecision, cacheMs: 0, share: sharer });
+  const keeper = o.escrow ? escrowKeeper(o.escrow) : null;
+  keeper?.start();
   return {
     facilitator: fac,
     /** The verdict for one seller (trusted, score, and `bonded` when refunds are on). */
@@ -43,7 +52,11 @@ export function scopeFacilitator<F extends HookableFacilitator>(fac: F, o: Facil
     rank: <T extends { resource?: string | { url?: string }; accepts?: { network?: string; payTo?: string }[] }>(items: T[]) => rankResources(items, check),
     /** A Bazaar-compatible discovery endpoint in front of `upstream`, ranked. */
     discovery: (upstream: string): http.Server => discoveryProxy({ upstream, check }),
-    /** Flushes shared resources. Call on shutdown. */
-    stop: async () => { await sharer?.stop(); },
+    /** The `escrow` scheme to register on your facilitator (`facilitator.register(network, scope.escrowScheme(signer))`). */
+    escrowScheme: (signer: Keypair) => new EscrowStellarFacilitatorScheme(signer, { rpcUrl: o.escrow?.rpcUrl, maxTransactionFeeStroops: o.escrow?.maxTransactionFeeStroops, onSettled: (id, contract) => keeper?.add(id, contract) }),
+    /** Releases and refunds what is due now (the keeper also runs on its own). */
+    settleEscrow: () => keeper?.tick(),
+    /** Flushes shared resources and stops the keeper. Call on shutdown. */
+    stop: async () => { keeper?.stop(); await sharer?.stop(); },
   };
 }

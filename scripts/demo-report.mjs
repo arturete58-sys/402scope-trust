@@ -36,6 +36,7 @@ if (c.budgetWallet) {
   out.push(`| Budgeted agent wallet (trust policy + spending limit, payments in SCOPE only; owner rule signed by a passkey) | ${con(c.budgetWallet)} |`);
   if (c.webauthnVerifier) out.push(`| WebAuthn (passkey) verifier | ${con(c.webauthnVerifier)} |`);
   if (c.refundBond) out.push(`| Refund bond (optional seller bonds, no admin) | ${con(c.refundBond)} |`);
+  if (c.escrow) out.push(`| Escrow (x402 scheme \`escrow\`, no admin) | ${con(c.escrow)} |`);
 }
 out.push(`| ed25519 verifier | ${con(c.verifier)} |`);
 out.push(`| Test token SCOPE (SEP-41) | ${con(c.token)} |`, '');
@@ -138,6 +139,14 @@ if (r.refunds) {
   out.push('| Endpoint | Receipt | Seller at fault | Refund |', '| --- | --- | --- | --- |');
   for (const c of f.calls) out.push(`| \`${c.endpoint}\` | ${c.receipt} | ${c.providerAtFault ? `yes (${c.codes.join(', ')})` : 'no'} | ${c.refund ? `**${c.refund.outcome}**${c.refund.tx ? ` ([tx](${c.refund.tx}))` : ''}${c.refund.error ? ` ${c.refund.error.slice(0, 120)}` : ''}` : 'none needed'} |`);
   out.push('', `The seller's own x402-receipt/3, a SEP-53 signature over the payment, the declared age (1,200 s) and the maximum it promised (60 s), was the proof: the contract checked it and refunded the payer in the same transaction. Bond before: ${units(f.bondBefore)} SCOPE, after: ${units(f.bondAfter)} SCOPE.`, '');
+}
+if (r.escrow) {
+  const x = r.escrow;
+  out.push('## Escrow: held until delivery, settled in seconds', '');
+  out.push(`The buyer's agent paid the escrow ${con(x.contract)} (x402 scheme \`escrow\`) instead of the seller. The data arrived at once; only the money was held. The agent checked each response: it confirmed the good one, so the seller was paid in the next ledger, and posted the seller's own breach receipt for the stale one, so it was refunded. A seller that posts no receipt within ${x.receiptDeadline} s is refunded by anyone; a posted receipt is released after ${x.contestWindow} s, or at once if the seller's refund bond covers it.`, '');
+  out.push('| Endpoint | Data received in | Seller at fault | Agent | Escrow | Settled in |', '| --- | --- | --- | --- | --- | --- |');
+  for (const c of x.calls) out.push(`| \`${c.endpoint}\` | ${c.dataSeconds ?? '—'} s | ${c.providerAtFault ? `yes (${(c.codes ?? []).join(', ')})` : 'no'} | ${c.action ?? c.error ?? '—'}${c.tx ? ` ([tx](${c.tx}))` : ''} | **${c.held ?? '—'}** | ${c.settledSeconds ?? '—'} s |`);
+  out.push('');
 }
 if (r.prepaidLedger) {
   const p = r.prepaidLedger;

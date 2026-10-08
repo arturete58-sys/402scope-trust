@@ -1410,6 +1410,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "scope-escrow"
+version = "0.2.0"
+dependencies = [
+ "ed25519-dalek",
+ "scope-refund-bond",
+ "sha2",
+ "soroban-sdk",
+ "stellar-accounts",
+ "stellar-strkey 0.0.16",
+]
+
+[[package]]
 name = "scope-refund-bond"
 version = "0.2.0"
 dependencies = [

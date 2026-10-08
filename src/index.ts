@@ -38,6 +38,7 @@ export { sep10Login, challenge as sep10Challenge, token as sep10Token, accountFr
 export { BATCH_SETTLEMENT, BatchSettlementStellarScheme, commitmentMessage, verifyCommitment, prepaidSeller, receiptSignersFor, type Commitment } from './prepaid.js';
 export { bondOf, depositBond, requestBondWithdraw, withdrawBond, claimRefund, claimRefunds, claimScVal, claimable, withBondInfo, OUTCOMES as REFUND_OUTCOMES, type Bond, type BondConfig, type RefundOutcome } from './refunds.js';
 export { signReceiptV3, receiptHashV3, receiptMessageV3, receiptShowsBreach, receiptStructXdr, receiptFacts, RECEIPT_VERSION_3, type ReceiptFacts } from './receipts.js';
+export { ESCROW, ESCROW_STATUS, EscrowStellarClientScheme, EscrowStellarServerScheme, EscrowStellarFacilitatorScheme, escrowConfirm, escrowSubmitReceipt, escrowExpire, escrowSettleDue, escrowHold, escrowKeeper, type EscrowConfig, type EscrowStatus } from './escrow.js';
 /** One call per role. Also importable as 402scope-trust/facilitator, /seller and /buyer. */
 export { scopeFacilitator, type FacilitatorOptions } from './roles/facilitator.js';
 export { scopeSeller, type SellerOptions } from './roles/seller.js';

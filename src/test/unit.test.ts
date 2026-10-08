@@ -286,3 +286,43 @@ test('scopeFacilitator: hooks on verify and settle, flag by default, refund-back
   await blocking.stop();
   await scope.stop();
 });
+
+test('escrow: requirements point to the escrow, the facilitator checks the exact call, receipts bind the escrow id', async () => {
+  const { Account, Address, Keypair, nativeToScVal, Networks, Operation, TransactionBuilder, xdr } = await import('@stellar/stellar-sdk');
+  const { EscrowStellarServerScheme, EscrowStellarFacilitatorScheme } = await import('../escrow.js');
+  const { receiptFacts } = await import('../receipts.js');
+  const ESCROW_C = 'CD3GESMYMJ3MNWNSKS6P7TEDHL5HYEWSGTFX7A3ENDB5MXTQ5TED7PSI';
+  const USDC = 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA';
+  const seller = Keypair.random().publicKey();
+  const buyer = Keypair.random().publicKey();
+
+  const server = new EscrowStellarServerScheme(ESCROW_C);
+  const req = await server.enhancePaymentRequirements({ scheme: 'escrow', network: 'stellar:testnet', asset: USDC, amount: '10000', payTo: seller, maxTimeoutSeconds: 60, extra: {} } as never, { x402Version: 2, scheme: 'escrow', network: 'stellar:testnet', extra: { areFeesSponsored: true } } as never, []);
+  assert.equal(req.payTo, ESCROW_C);
+  assert.equal((req.extra as { seller: string }).seller, seller);
+  assert.deepEqual(checkRequirement(req, 0), []);
+
+  const id = 'ab'.repeat(32);
+  const payTx = (o: { to?: string; amount?: bigint; contract?: string; fn?: string }) => {
+    const args = [new Address(buyer).toScVal(), new Address(o.to ?? seller).toScVal(), new Address(USDC).toScVal(), nativeToScVal(o.amount ?? 10_000n, { type: 'i128' }), xdr.ScVal.scvBytes(Buffer.from(id, 'hex'))];
+    return new TransactionBuilder(new Account(buyer, '0'), { fee: '100', networkPassphrase: Networks.TESTNET })
+      .addOperation(Operation.invokeContractFunction({ contract: o.contract ?? ESCROW_C, function: o.fn ?? 'pay', args, auth: [] }))
+      .setTimeout(60).build().toXDR();
+  };
+  const fac = new EscrowStellarFacilitatorScheme(Keypair.random());
+  const v = (tx: string, pid = id) => fac.verify({ x402Version: 2, accepted: req, payload: { transaction: tx, id: pid } } as never, req);
+  assert.equal((await v(payTx({ to: Keypair.random().publicKey() }))).invalidReason, 'invalid_escrow_seller');
+  assert.equal((await v(payTx({ amount: 1n }))).invalidReason, 'invalid_escrow_amount');
+  assert.equal((await v(payTx({ contract: USDC }))).invalidReason, 'invalid_escrow_operation');
+  assert.equal((await v(payTx({ fn: 'confirm' }))).invalidReason, 'invalid_escrow_operation');
+  assert.equal((await v(payTx({}), 'cd'.repeat(32))).invalidReason, 'invalid_escrow_id');
+  assert.equal((await v(payTx({}))).invalidReason, 'invalid_escrow_auth'); // unsigned
+
+  // The seller's receipt for an escrow payment: the escrow id as `payment`, the seller as payTo.
+  const header = Buffer.from(JSON.stringify({ x402Version: 2, accepted: req, payload: { transaction: 'x', id } })).toString('base64');
+  const settlement = Buffer.from(JSON.stringify({ success: true, payer: buyer })).toString('base64');
+  const facts = receiptFacts(header, settlement, 'https://s.example/q', { version: 1, freshness: { maxAgeSeconds: 60 } }, null);
+  assert.equal(facts?.paymentId, id);
+  assert.equal(facts?.payTo, seller);
+  assert.equal(facts?.payer, buyer);
+});

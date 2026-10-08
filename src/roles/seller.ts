@@ -1,7 +1,9 @@
 import type { Keypair } from '@stellar/stellar-sdk';
 import type { RequestHandler } from 'express';
 import { declarations, declare, declareDeliveryTerms, type DeliveryTerms, type ResponseDeclaration } from '../declarations.js';
-import { deliveryReceipts } from '../receipts.js';
+import { decodeReceipt, deliveryReceipts, RECEIPT_HEADER, RECEIPT_VERSION_3 } from '../receipts.js';
+import { Keypair as KP } from '@stellar/stellar-sdk';
+import { EscrowStellarServerScheme, escrowSubmitReceipt, type EscrowConfig } from '../escrow.js';
 import { bondOf, depositBond, requestBondWithdraw, withdrawBond, type BondConfig } from '../refunds.js';
 
 /**
@@ -24,6 +26,14 @@ export interface SellerOptions {
   terms: DeliveryTerms;
   /** Optional: back your terms with a refund bond in this contract. */
   refund?: BondConfig;
+  /**
+   * Optional: accept the `escrow` scheme. Register `scope.escrowScheme` on your
+   * resource server and use `scheme: 'escrow'` in your route's accepts.
+   * With `postReceipts`, your receipt is posted to the escrow after each paid
+   * response, so you are paid even if the buyer never confirms (at once if
+   * your refund bond covers the amount, otherwise after the contest window).
+   */
+  escrow?: EscrowConfig & { postReceipts?: boolean; onPosted?: (r: { id: string; status?: string; tx?: string; error?: string }) => void };
 }
 
 export function scopeSeller(o: SellerOptions) {
@@ -32,6 +42,23 @@ export function scopeSeller(o: SellerOptions) {
     : o.terms;
   const extensions = declareDeliveryTerms(terms);
   const middleware: RequestHandler[] = [declarations() as RequestHandler, deliveryReceipts({ secret: o.secret, terms }) as RequestHandler];
+  if (o.escrow?.postReceipts) {
+    const cfg = o.escrow;
+    const key = KP.fromSecret(o.secret);
+    // After the response is sent: post this escrow payment's receipt. Never delays the buyer.
+    middleware.unshift(((req, res, next) => {
+      res.on('finish', () => {
+        const r = decodeReceipt(String(res.getHeader(RECEIPT_HEADER) ?? ''));
+        let id: string | null = null;
+        try { id = JSON.parse(Buffer.from(req.header('PAYMENT-SIGNATURE') ?? '', 'base64').toString('utf8'))?.payload?.id ?? null; } catch { id = null; }
+        if (!r || r.v !== RECEIPT_VERSION_3 || !id || r.payment !== id) return;
+        escrowSubmitReceipt(cfg, { submitter: key, id, receipt: r })
+          .then((x) => cfg.onPosted?.({ id: id!, status: x.status, tx: x.tx }))
+          .catch((e: Error) => cfg.onPosted?.({ id: id!, error: e.message.slice(0, 300) }));
+      });
+      next();
+    }) as RequestHandler);
+  }
   const bond = o.refund
     ? {
         /** Deposit `amount` (token base units) from `owner`, behind receipts signed by `signer` (your payTo). */
@@ -50,5 +77,7 @@ export function scopeSeller(o: SellerOptions) {
     /** Declares one response (also available as `res.declare` after the middleware). */
     declare: (res: Parameters<typeof declare>[0], d: ResponseDeclaration) => declare(res, d),
     bond,
+    /** Register on your x402 resource server for routes with `scheme: 'escrow'`. */
+    escrowScheme: o.escrow ? new EscrowStellarServerScheme(o.escrow.contract) : null,
   };
 }

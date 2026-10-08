@@ -55,12 +55,15 @@ export function checkRequirement(r: PaymentRequirements, i: number): Issue[] {
   const out: Issue[] = [];
   const at = `accepts[${i}]`;
   const batch = r.scheme === 'batch-settlement';
-  if (r.scheme !== 'exact' && !batch) out.push({ code: 'scheme', message: `${at}: scheme "${r.scheme}" is not "exact" or "batch-settlement"` });
+  const escrow = r.scheme === 'escrow';
+  if (r.scheme !== 'exact' && !batch && !escrow) out.push({ code: 'scheme', message: `${at}: scheme "${r.scheme}" is not "exact", "escrow" or "batch-settlement"` });
+  if (escrow && !/^G[A-Z2-7]{55}$/.test(String((r.extra as { seller?: unknown } | undefined)?.seller ?? ''))) out.push({ code: 'seller', message: `${at}: escrow requirements need extra.seller (G...)` });
   if (r.network !== 'stellar:pubnet' && r.network !== 'stellar:testnet')
     out.push({ code: 'network', message: `${at}: unknown Stellar network "${r.network}"` });
   if (!C_ADDR.test(r.asset ?? '')) out.push({ code: 'asset', message: `${at}: asset is not a Soroban contract address` });
   if (!G_OR_C.test(r.payTo ?? '')) out.push({ code: 'payTo', message: `${at}: payTo is not a Stellar address` });
   else if (batch && !C_ADDR.test(r.payTo)) out.push({ code: 'payTo', message: `${at}: batch-settlement payTo must be the seller's ledger contract (C...)` });
+  else if (escrow && !C_ADDR.test(r.payTo)) out.push({ code: 'payTo', message: `${at}: escrow payTo must be the escrow contract (C...)` });
   if (!/^\d+$/.test(r.amount ?? '') || BigInt(r.amount) === 0n)
     out.push({ code: 'amount', message: `${at}: amount must be a positive integer in token units` });
   if (!Number.isInteger(r.maxTimeoutSeconds) || r.maxTimeoutSeconds <= 0)

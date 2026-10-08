@@ -54,6 +54,7 @@ import { onchainSellerChecker, rankResources, withTrustHooks, type TrustDecision
 import { prepaidSeller } from '../prepaid.js';
 import { bondOf, depositBond, withBondInfo } from '../refunds.js';
 import { scopeFetch, type DeliveryReport } from '../roles/buyer.js';
+import { EscrowStellarClientScheme, EscrowStellarFacilitatorScheme, EscrowStellarServerScheme, escrowHold } from '../escrow.js';
 import { NO_DECLARATIONS } from '../probe.js';
 import { scoreEndpoint } from '../score.js';
 import { sellerScores } from '../seller.js';
@@ -137,6 +138,10 @@ async function main(): Promise<void> {
   const refundBond = await deployWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_refund_bond'), args: { notice_ledgers: 720, claim_window: 3600n } });
   const bondCfg = { contract: refundBond, rpcUrl: RPC, networkPassphrase: PASS };
   const bondDepositTx = await depositBond(bondCfg, { owner: k.sellerStale, signer: k.sellerStale.publicKey(), token, amount: SELLER_BOND });
+  // Escrow: payments held until delivery is shown. No admin; bonded sellers are paid at once.
+  log('deploying the escrow');
+  const escrow = await deployWasm({ rpcUrl: RPC, networkPassphrase: PASS, deployer: k.admin, wasm: wasm('scope_escrow'), args: { receipt_deadline: 60n, contest_window: 120n, bond_contract: refundBond } });
+  const escrowCfg = { contract: escrow, rpcUrl: RPC, networkPassphrase: PASS };
   const attesters = [k.attester1.publicKey(), k.attester2.publicKey()];
   const policyParams = { registry, attesters, minScore: 80, quorum: 2, maxUnverified: 0n };
   log('deploying the agent wallet with the trust policy installed');
@@ -156,7 +161,7 @@ async function main(): Promise<void> {
   });
   await submit(server, PASS, k.issuer, Operation.invokeContractFunction({ contract: token, function: 'mint', args: [new Address(budgetWallet).toScVal(), nativeToScVal(10n * UNIT, { type: 'i128' })] }));
   const c = (id: string) => `https://stellar.expert/explorer/testnet/contract/${id}`;
-  out.contracts = { registry, policy, verifier, wallet, token, spendingLimit: limitPolicy, budgetWallet, webauthnVerifier, refundBond, links: { refundBond: c(refundBond), registry: c(registry), policy: c(policy), wallet: c(wallet), token: c(token), spendingLimit: c(limitPolicy), budgetWallet: c(budgetWallet), webauthnVerifier: c(webauthnVerifier) } };
+  out.contracts = { registry, policy, verifier, wallet, token, spendingLimit: limitPolicy, budgetWallet, webauthnVerifier, refundBond, escrow, links: { refundBond: c(refundBond), escrow: c(escrow), registry: c(registry), policy: c(policy), wallet: c(wallet), token: c(token), spendingLimit: c(limitPolicy), budgetWallet: c(budgetWallet), webauthnVerifier: c(webauthnVerifier) } };
   out.policy = { attesters, minScore: 80, quorum: 2, maxUnverified: '0' };
   log('registry', registry, 'policy', policy, 'wallet', wallet);
 
@@ -170,7 +175,9 @@ async function main(): Promise<void> {
   // 3. Local facilitator and two sellers
   // Smart-account payments run __check_auth and the policy (cross-contract reads), so they cost more
   // than a classic transfer; the facilitator's default fee ceiling (50,000 stroops) is raised here.
-  const facilitator = new x402Facilitator().register(NETWORK, new FacilitatorScheme([createEd25519Signer(k.facilitator.secret(), NETWORK)], { maxTransactionFeeStroops: 2_000_000 }));
+  const facilitator = new x402Facilitator()
+    .register(NETWORK, new FacilitatorScheme([createEd25519Signer(k.facilitator.secret(), NETWORK)], { maxTransactionFeeStroops: 2_000_000 }))
+    .register(NETWORK, new EscrowStellarFacilitatorScheme(k.facilitator, { rpcUrl: RPC }));
   // 402Scope trust hooks on a standard facilitator. Off while attesters measure; enforced from step 7.
   let enforce = false;
   const onchainCheck = onchainSellerChecker({ contractId: registry, rpcUrl: RPC, networkPassphrase: PASS, attesters, quorum: 2 }, 80);
@@ -196,7 +203,7 @@ async function main(): Promise<void> {
     },
     getSupported: async () => facilitator.getSupported(),
   };
-  const resourceServer = new x402ResourceServer(facClient as never).register(NETWORK, new ServerScheme()).registerExtension(declarationsResourceServerExtension);
+  const resourceServer = new x402ResourceServer(facClient as never).register(NETWORK, new ServerScheme()).register(NETWORK, new EscrowStellarServerScheme(escrow)).registerExtension(declarationsResourceServerExtension);
   const terms: DeliveryTerms = { version: 1, freshness: { maxAgeSeconds: 60, basis: 'live' }, provenance: { source: 'demo-feed' }, perResponse: true, onBreach: 'refund' };
   const refundTerms: DeliveryTerms = { ...terms, refund: { contract: refundBond, network: NETWORK } };
   const accepts = (payTo: Keypair) => ({ scheme: 'exact', network: NETWORK, payTo: payTo.publicKey(), price: { amount: PRICE, asset: token } });
@@ -206,10 +213,14 @@ async function main(): Promise<void> {
     'GET /stale': { accepts: accepts(k.sellerStale), description: 'Promises data under 60 s old, serves 20-minute-old data', mimeType: 'application/json', extensions: declareDeliveryTerms(refundTerms) },
     'GET /wrong-type': { accepts: accepts(k.sellerBad), description: 'Declares JSON, returns HTML', mimeType: 'application/json' },
     'GET /broken': { accepts: accepts(k.sellerBad), description: 'Always fails', mimeType: 'application/json' },
+    'GET /escrow-good': { accepts: { ...accepts(k.sellerGood), scheme: 'escrow' }, description: 'Fresh quote, paid through escrow', mimeType: 'application/json', extensions: declareDeliveryTerms(terms) },
+    'GET /escrow-stale': { accepts: { ...accepts(k.sellerStale), scheme: 'escrow' }, description: 'Stale quote, paid through escrow', mimeType: 'application/json', extensions: declareDeliveryTerms(terms) },
   };
   const app = express();
   app.use(['/good', '/slow'], deliveryReceipts({ secret: k.sellerGood.secret(), resourceUrl: (req) => `${base}${req.originalUrl}` }));
   // The stale seller backs its terms with the bond: x402-receipt/3, checkable by the contract.
+  app.use('/escrow-good', deliveryReceipts({ secret: k.sellerGood.secret(), resourceUrl: (req) => `${base}${req.originalUrl}`, terms }));
+  app.use('/escrow-stale', deliveryReceipts({ secret: k.sellerStale.secret(), resourceUrl: (req) => `${base}${req.originalUrl}`, terms }));
   app.use('/stale', deliveryReceipts({ secret: k.sellerStale.secret(), resourceUrl: (req) => `${base}${req.originalUrl}`, terms: refundTerms }));
   app.use(paymentMiddleware(routes as never, resourceServer));
   const fresh = { freshness: { ageSeconds: 2, isStale: false, basis: 'live' as const }, provenance: { source: 'demo-feed' } };
@@ -219,6 +230,8 @@ async function main(): Promise<void> {
   app.get('/stale', (_q, s) => { declare(s, { freshness: { ageSeconds: 1200, isStale: false, basis: 'cache' }, provenance: { source: 'demo-feed' } }); s.json({ pair: 'XLM/USD', price: 0.39 }); });
   app.get('/wrong-type', (_q, s) => { s.type('text/html').send('<html><body>not what you paid for</body></html>'); });
   app.get('/broken', (_q, s) => { s.status(500).json({ error: 'upstream down' }); });
+  app.get('/escrow-good', (_q, s) => { declare(s, fresh); s.json({ pair: 'XLM/USD', price: 0.42, at: new Date().toISOString() }); });
+  app.get('/escrow-stale', (_q, s) => { declare(s, { freshness: { ageSeconds: 1200, isStale: false, basis: 'cache' }, provenance: { source: 'demo-feed' } }); s.json({ pair: 'XLM/USD', price: 0.39 }); });
   const http = await new Promise<import('node:http').Server>((ok) => { const h = app.listen(0, '127.0.0.1', () => ok(h)); });
   const base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`;
   const names = ['good', 'slow', 'wrong-type', 'broken', 'stale'];
@@ -384,6 +397,34 @@ async function main(): Promise<void> {
   };
   log('refunds', JSON.stringify(out.refunds));
 
+  // 6d. Escrow: the agent pays the escrow; the data arrives at once. It confirms a good
+  // delivery (the seller is paid in the next ledger) and posts a breach receipt (refunded).
+  const escrowReports: DeliveryReport[] = [];
+  const escrowAgent = scopeFetch({
+    client: x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new EscrowStellarClientScheme(k.buyer1, { url: RPC }) }], spendControls: false }),
+    escrow: { payer: k.buyer1, rpcUrl: RPC, networkPassphrase: PASS },
+    onReport: (r) => escrowReports.push(r),
+  });
+  const escrowCalls: Record<string, unknown>[] = [];
+  for (const name of ['escrow-good', 'escrow-stale']) {
+    const t0 = Date.now();
+    try {
+      const r = await escrowAgent(`${base}/${name}`);
+      const dataMs = Date.now() - t0;
+      const rep = escrowReports.at(-1)!;
+      const hold = rep.escrow ? await escrowHold(escrowCfg, rep.escrow.id) : null;
+      escrowCalls.push({
+        endpoint: `/${name}`, status: r.status, receipt: rep.receipt, providerAtFault: rep.providerAtFault, codes: rep.codes,
+        action: rep.escrow?.action, tx: rep.escrow?.tx ? txUrl(rep.escrow.tx) : null, error: rep.escrow?.error, held: hold?.status ?? null,
+        dataSeconds: Math.round(dataMs / 100) / 10, settledSeconds: Math.round((Date.now() - t0) / 100) / 10,
+      });
+    } catch (e) {
+      escrowCalls.push({ endpoint: `/${name}`, error: (e as Error).message.slice(0, 300), facilitator: verifyLog.at(-1) });
+    }
+    log(`escrow /${name}`, JSON.stringify(escrowCalls.at(-1)));
+  }
+  out.escrow = { contract: escrow, receiptDeadline: 60, contestWindow: 120, calls: escrowCalls };
+
   // 7. Any facilitator: trust hooks on the facilitator, and a ranked Bazaar listing
   enforce = true;
   const plain = wrapFetchWithPayment(fetch, x402Client.fromConfig({ schemes: [{ network: 'stellar:*', client: new ClientScheme(createEd25519Signer(k.buyer2.secret(), NETWORK)) }], spendControls: false }));
@@ -435,12 +476,15 @@ async function main(): Promise<void> {
   const facOk = facilitatorPayments[0]?.outcome === 'paid' && facilitatorPayments[1]?.outcome !== 'paid';
   const o = budgetPayments.map((p) => String(p.outcome));
   const rf = (out.refunds as { calls: { endpoint: string; refund: { outcome: string } | null }[] }).calls;
+  const ec = escrowCalls as { endpoint: string; held?: string }[];
+  const escrowOk = ec.find((c) => c.endpoint === '/escrow-good')?.held === 'released' && ec.find((c) => c.endpoint === '/escrow-stale')?.held === 'refunded';
+  if (!escrowOk) log('escrow expectations not met', JSON.stringify(ec));
   const refundOk = rf.find((c) => c.endpoint === '/stale')?.refund?.outcome === 'refunded' && !rf.find((c) => c.endpoint === '/good')?.refund;
   if (!refundOk) log('refund expectations not met', JSON.stringify(rf));
   const budgetOk = o[0] === 'refused by the wallet: seller not trusted' && o[1] === 'paid' && o[2] === 'paid' && o[3] === 'refused by the wallet: over the spending limit' && owner.raised === true && (owner.paymentAfter as { outcome?: string } | undefined)?.outcome === 'paid';
   if (!budgetOk) log('budgeted wallet expectations not met', JSON.stringify(budgetPayments.map((p) => ({ outcome: p.outcome, facilitator: p.facilitator, reason: String(p.reason ?? '').slice(0, 160) }))));
-  if (!goodPaid || !badRefused || !facOk || !budgetOk || !refundOk || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
-    throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused} facilitatorHooks=${facOk} budget=${o.join(',')} refund=${refundOk}`);
+  if (!goodPaid || !badRefused || !facOk || !budgetOk || !refundOk || !escrowOk || !(out.evidence as { realLeafVerifiedOnchain: boolean }).realLeafVerifiedOnchain) {
+    throw new Error(`demo expectations not met: goodPaid=${goodPaid} badRefused=${badRefused} facilitatorHooks=${facOk} budget=${o.join(',')} refund=${refundOk} escrow=${escrowOk}`);
   }
 }
 

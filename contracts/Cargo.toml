@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["attestations", "trust-policy", "agent-wallet", "ed25519-verifier", "spending-limit", "webauthn-verifier", "refund-bond"]
+members = ["attestations", "trust-policy", "agent-wallet", "ed25519-verifier", "spending-limit", "webauthn-verifier", "refund-bond", "escrow"]
 
 [workspace.package]
 edition = "2021"

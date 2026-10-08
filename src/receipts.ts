@@ -67,6 +67,8 @@ export interface Receipt {
 
 /** The v3 facts beyond v2. */
 export interface ReceiptFacts {
+  /** For escrow payments: the escrow id, used as the receipt's `payment`. */
+  paymentId?: string;
   payer: string;
   payTo: string;
   asset: string;
@@ -130,7 +132,7 @@ export function receiptShowsBreach(r: Receipt): boolean {
 }
 
 /** Signs a v3 receipt: what was delivered, for which payment, and the facts a refund contract needs. */
-export function signReceiptV3(secret: string, p: { resource: string; paymentHeader: string; body: Uint8Array | string; at?: number; declaration?: string | null } & ReceiptFacts): Receipt {
+export function signReceiptV3(secret: string, p: { resource: string; paymentHeader: string; body: Uint8Array | string; at?: number; declaration?: string | null; paymentId?: string } & ReceiptFacts): Receipt {
   const kp = Keypair.fromSecret(secret);
   const r: Receipt = {
     v: RECEIPT_VERSION_3, ...receiptBase(p), signer: kp.publicKey(), sig: '',
@@ -141,8 +143,8 @@ export function signReceiptV3(secret: string, p: { resource: string; paymentHead
 }
 
 type ReceiptBase = Pick<Receipt, 'resource' | 'payment' | 'body' | 'at' | 'decl'>;
-function receiptBase(p: { resource: string; paymentHeader: string; body: Uint8Array | string; at?: number; declaration?: string | null }): ReceiptBase {
-  return { resource: p.resource, payment: sha256hex(p.paymentHeader), body: sha256hex(p.body), at: p.at ?? Math.floor(Date.now() / 1000), ...(p.declaration ? { decl: sha256hex(p.declaration) } : {}) };
+function receiptBase(p: { resource: string; paymentHeader: string; body: Uint8Array | string; at?: number; declaration?: string | null; paymentId?: string }): ReceiptBase {
+  return { resource: p.resource, payment: p.paymentId ?? sha256hex(p.paymentHeader), body: sha256hex(p.body), at: p.at ?? Math.floor(Date.now() / 1000), ...(p.declaration ? { decl: sha256hex(p.declaration) } : {}) };
 }
 
 /**
@@ -181,10 +183,11 @@ export function decodeReceipt(header: string | null | undefined): Receipt | null
  *   nor one of `signers` (keys bound to it, such as a prepaid ledger's seller);
  * - `invalid`: wrong signature or hashes; `missing`: no receipt.
  */
-export function verifyReceipt(r: Receipt | null, expect: { paymentHeader: string; body: Uint8Array | string; payTo?: string | null; declaration?: string | null; signers?: string[] }): ReceiptCheck {
+export function verifyReceipt(r: Receipt | null, expect: { paymentHeader: string; body: Uint8Array | string; payTo?: string | null; declaration?: string | null; signers?: string[]; paymentId?: string | null }): ReceiptCheck {
   if (!r) return 'missing';
   try {
-    if (r.payment !== sha256hex(expect.paymentHeader) || r.body !== sha256hex(expect.body)) return 'invalid';
+    // Escrow payments are identified by their escrow id; others by the hash of the payment header.
+    if (r.payment !== (expect.paymentId ?? sha256hex(expect.paymentHeader)) || r.body !== sha256hex(expect.body)) return 'invalid';
     // A declaration received must be the one signed, and a signed one must have been received.
     if ((r.decl ?? null) !== (expect.declaration ? sha256hex(expect.declaration) : null)) return 'invalid';
     const kp = Keypair.fromPublicKey(r.signer);
@@ -268,10 +271,14 @@ export function receiptFacts(paymentHeader: string, settlementHeader: unknown, r
   const accepted = payment?.accepted ?? payment?.paymentRequirements;
   const payer: string | undefined = settlement?.payer ?? payment?.payload?.payer;
   if (!accepted?.payTo || !accepted?.asset || !accepted?.amount || !payer) return null;
+  // Escrow: the receipt names the seller (not the escrow contract) and the escrow id.
+  const escrow = accepted.scheme === 'escrow';
+  if (escrow && !(accepted.extra?.seller && /^[0-9a-f]{64}$/.test(payment?.payload?.id ?? ''))) return null;
   const d = checkDelivery({ url: resource, terms, header: declaration });
   return {
+    ...(escrow ? { paymentId: payment!.payload.id as string } : {}),
     payer,
-    payTo: accepted.payTo,
+    payTo: escrow ? accepted.extra.seller : accepted.payTo,
     asset: accepted.asset,
     amount: String(accepted.amount),
     age: typeof d.declaration.freshness?.ageSeconds === 'number' ? Math.max(0, Math.min(0xfffffffe, Math.round(d.declaration.freshness.ageSeconds))) : null,
