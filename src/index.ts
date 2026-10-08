@@ -35,5 +35,6 @@ export {
 } from './contributions.js';
 export { attesterIdentity, type AttesterIdentity, type IdentityOptions } from './identity.js';
 export { sep10Login, challenge as sep10Challenge, token as sep10Token, accountFromToken, webAuthFromEnv, contributorAccountsFromEnv, type WebAuthConfig } from './sep10.js';
+export { BATCH_SETTLEMENT, BatchSettlementStellarScheme, commitmentMessage, verifyCommitment, prepaidSeller, receiptSignersFor, type Commitment } from './prepaid.js';
 /** Typed clients for the 402Scope contracts, generated from their wasm. */
 export * as clients from './clients/index.js';

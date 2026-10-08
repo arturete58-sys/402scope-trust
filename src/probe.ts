@@ -46,20 +46,26 @@ export function assertPublicUrl(input: string): URL {
 const G_OR_C =/^[GCM][A-Z2-7]{55}$|^M[A-Z2-7]{68}$/;
 const C_ADDR = /^C[A-Z2-7]{55}$/;
 
-/** Checks one Stellar payment option against the x402 v2 "exact" rules. */
+/**
+ * Checks one Stellar payment option against the x402 v2 rules of its scheme:
+ * `exact`, or `batch-settlement` (prepaid ledgers such as Fermah Pay, whose
+ * payTo is the seller's ledger contract and whose fees are not the buyer's).
+ */
 export function checkRequirement(r: PaymentRequirements, i: number): Issue[] {
   const out: Issue[] = [];
   const at = `accepts[${i}]`;
-  if (r.scheme !== 'exact') out.push({ code: 'scheme', message: `${at}: scheme "${r.scheme}" is not "exact"` });
+  const batch = r.scheme === 'batch-settlement';
+  if (r.scheme !== 'exact' && !batch) out.push({ code: 'scheme', message: `${at}: scheme "${r.scheme}" is not "exact" or "batch-settlement"` });
   if (r.network !== 'stellar:pubnet' && r.network !== 'stellar:testnet')
     out.push({ code: 'network', message: `${at}: unknown Stellar network "${r.network}"` });
   if (!C_ADDR.test(r.asset ?? '')) out.push({ code: 'asset', message: `${at}: asset is not a Soroban contract address` });
   if (!G_OR_C.test(r.payTo ?? '')) out.push({ code: 'payTo', message: `${at}: payTo is not a Stellar address` });
+  else if (batch && !C_ADDR.test(r.payTo)) out.push({ code: 'payTo', message: `${at}: batch-settlement payTo must be the seller's ledger contract (C...)` });
   if (!/^\d+$/.test(r.amount ?? '') || BigInt(r.amount) === 0n)
     out.push({ code: 'amount', message: `${at}: amount must be a positive integer in token units` });
   if (!Number.isInteger(r.maxTimeoutSeconds) || r.maxTimeoutSeconds <= 0)
     out.push({ code: 'timeout', message: `${at}: maxTimeoutSeconds must be a positive integer` });
-  if (r.extra?.areFeesSponsored === undefined)
+  if (!batch && r.extra?.areFeesSponsored === undefined)
     out.push({ code: 'fees', message: `${at}: extra.areFeesSponsored is missing` });
   return out;
 }

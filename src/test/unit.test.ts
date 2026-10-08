@@ -208,3 +208,36 @@ test('passkeys: assertions verify as WebAuthn expects, DER converts to raw, sign
     assert.ok(verify('sha256', signed, { key: pub, dsaEncoding: 'ieee-p1363' }, raw));
   }
 });
+
+test('batch-settlement (prepaid ledgers): commitment text, SEP-53 signature, requirement checks, receipts from the seller role', async () => {
+  const { Keypair } = await import('@stellar/stellar-sdk');
+  const { BatchSettlementStellarScheme, commitmentMessage, verifyCommitment } = await import('../prepaid.js');
+  const { signReceipt, verifyReceipt } = await import('../receipts.js');
+  const LEDGER = 'CD3GESMYMJ3MNWNSKS6P7TEDHL5HYEWSGTFX7A3ENDB5MXTQ5TED7PSI';
+  const USDC = 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA';
+  // Byte for byte the format of fermah-pay-stellar crates/gateway/src/x402.rs commitment_message.
+  const c = { network: 'stellar:testnet', asset: USDC, payTo: LEDGER, amount: '50000', payer: 'GAAA', commitment: 'ab'.repeat(32), validUntil: '1790000000' };
+  assert.equal(commitmentMessage(c), `x402 batch-settlement commitment\nnetwork: stellar:testnet\nasset: ${USDC}\npayTo: ${LEDGER}\namount: 50000\npayer: GAAA\ncommitment: ${'ab'.repeat(32)}\nvalidUntil: 1790000000`);
+
+  const buyer = Keypair.random();
+  const req = { scheme: 'batch-settlement', network: 'stellar:testnet', asset: USDC, amount: '50000', payTo: LEDGER, maxTimeoutSeconds: 120, extra: {} };
+  const now = 1_790_000_000;
+  const { payload } = await new BatchSettlementStellarScheme(buyer, () => now).createPaymentPayload(2, req as never);
+  const p = payload as { payer: string; commitment: string; validUntil: string; signature: string };
+  assert.equal(p.payer, buyer.publicKey());
+  assert.match(p.commitment, /^[0-9a-f]{64}$/);
+  assert.ok(Number(p.validUntil) > now && Number(p.validUntil) <= now + 120);
+  const signed = { network: req.network, asset: USDC, payTo: LEDGER, amount: '50000', payer: p.payer, commitment: p.commitment, validUntil: p.validUntil };
+  assert.ok(verifyCommitment(signed, p.signature));
+  assert.ok(!verifyCommitment({ ...signed, amount: '50001' }, p.signature));
+
+  assert.deepEqual(checkRequirement(req as never, 0), []);
+  assert.deepEqual(checkRequirement({ ...req, payTo: buyer.publicKey() } as never, 0).map((i) => i.code), ['payTo']);
+
+  // The ledger contract cannot sign: a receipt by its seller role is valid once that key is known.
+  const seller = Keypair.random();
+  const r = signReceipt(seller.secret(), { resource: 'https://s.example/x', paymentHeader: 'hdr', body: 'ok' });
+  assert.equal(verifyReceipt(r, { paymentHeader: 'hdr', body: 'ok', payTo: LEDGER }), 'unbound');
+  assert.equal(verifyReceipt(r, { paymentHeader: 'hdr', body: 'ok', payTo: LEDGER, signers: [LEDGER, seller.publicKey()] }), 'valid');
+  assert.equal(verifyReceipt(r, { paymentHeader: 'hdr', body: 'ok', payTo: LEDGER, signers: [LEDGER, Keypair.random().publicKey()] }), 'unbound');
+});

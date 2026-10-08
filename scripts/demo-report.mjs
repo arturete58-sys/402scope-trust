@@ -129,6 +129,14 @@ if (r.openzeppelin) {
     out.push('');
   }
 }
+if (r.prepaidLedger) {
+  const p = r.prepaidLedger;
+  out.push('## Prepaid ledgers (batch-settlement)', '');
+  out.push(p.readable
+    ? `Fermah Pay's prepaid ledger on testnet, ${con(p.contract)}, names its seller role onchain: ${acct(p.seller)}. A delivery receipt from a seller paid through that ledger is checked against this key, since the ledger contract (the \`payTo\`) cannot sign.`
+    : `The seller role of the prepaid ledger ${p.contract ? con(p.contract) : ''} could not be read${p.error ? `: ${p.error}` : ''}.`, '');
+}
+
 if (r.officialDemo) {
   out.push("## Stellar's official x402 demo (unpaid conformance check)", '');
   if (r.officialDemo.error) out.push(`Not reachable in this run: ${r.officialDemo.error}`);

@@ -6,6 +6,8 @@ import type { PaymentRequirements } from '@x402/core/types';
 import { USER_AGENT } from './probe.js';
 import { decodeReceipt, RECEIPT_HEADER, sha256hex, verifyReceipt, type ReceiptCheck } from './receipts.js';
 import { checkDelivery, DECLARATION_HEADER, type DeliveryCheck, type DeliveryTerms } from './declarations.js';
+import { Keypair } from '@stellar/stellar-sdk';
+import { BATCH_SETTLEMENT, BatchSettlementStellarScheme, receiptSignersFor } from './prepaid.js';
 
 /** One paid call made by the measurer. */
 export interface PaidCall {
@@ -27,6 +29,8 @@ export interface PaidCall {
   receipt?: ReceiptCheck;
   /** The payTo that was paid. */
   payTo?: string;
+  /** The scheme paid with: `exact`, or `batch-settlement` from a prepaid balance. */
+  scheme?: string;
   /** What the seller declared about this response, checked against its own terms (see declarations.ts). */
   declaration?: { basis: DeliveryCheck['basis']; providerAtFault: boolean; codes: string[]; ageSeconds: number | null };
   error?: string;
@@ -45,6 +49,12 @@ export interface MeasureOptions {
   /** Delivery terms from the 402 challenge (extensions.declarations). */
   terms?: DeliveryTerms | null;
   timeoutMs?: number;
+  /**
+   * Also pay `batch-settlement` sellers (prepaid ledgers such as Fermah Pay).
+   * Only works where the measurement wallet is a buyer with a prepaid balance;
+   * `exact` is preferred whenever both are offered.
+   */
+  prepaid?: boolean;
 }
 
 /**
@@ -57,12 +67,16 @@ export async function measurePaid(url: string, opts: MeasureOptions): Promise<Pa
   // Spend limits are ours: only the configured network, never above maxAmount.
   // Built-in spend controls are off so test tokens (not only USDC) can be measured.
   const client = x402Client.fromConfig({
-    schemes: [{ network: 'stellar:*', client: new ExactStellarScheme(signer, opts.rpcUrl ? { url: opts.rpcUrl } : undefined) }],
+    schemes: [
+      { network: 'stellar:*', client: new ExactStellarScheme(signer, opts.rpcUrl ? { url: opts.rpcUrl } : undefined) },
+      ...(opts.prepaid ? [{ network: 'stellar:*' as const, client: new BatchSettlementStellarScheme(Keypair.fromSecret(opts.secret)) }] : []),
+    ],
     spendControls: false,
-    policies: [(_v: number, reqs: PaymentRequirements[]) => reqs.filter((a) => a.network === opts.network && BigInt(a.amount) <= opts.maxAmount)],
+    policies: [(_v: number, reqs: PaymentRequirements[]) => reqs.filter((a) => a.network === opts.network && BigInt(a.amount) <= opts.maxAmount && (a.scheme === 'exact' || (opts.prepaid && a.scheme === BATCH_SETTLEMENT)))],
     paymentRequirementsSelector: (_v: number, reqs: PaymentRequirements[]) => {
-      if (!reqs.length) throw new Error(`no ${opts.network} option at or below ${opts.maxAmount}`);
-      chosen = [...reqs].sort((a, b) => (BigInt(a.amount) < BigInt(b.amount) ? -1 : 1))[0];
+      if (!reqs.length) throw new Error(`no ${opts.network} option at or below ${opts.maxAmount}${opts.prepaid ? '' : ' (batch-settlement needs a prepaid balance: measure with prepaid: true)'}`);
+      const rank = (a: PaymentRequirements) => (a.scheme === 'exact' ? 0 : 1);
+      chosen = [...reqs].sort((a, b) => rank(a) - rank(b) || (BigInt(a.amount) < BigInt(b.amount) ? -1 : BigInt(a.amount) > BigInt(b.amount) ? 1 : 0))[0];
       return chosen;
     },
   });
@@ -88,8 +102,12 @@ export async function measurePaid(url: string, opts: MeasureOptions): Promise<Pa
     const paid = chosen as PaymentRequirements | null;
     call.declaredAmount = paid?.amount ?? null;
     call.payTo = paid?.payTo;
+    call.scheme = paid?.scheme;
     const declHeader = r.headers.get(DECLARATION_HEADER);
-    call.receipt = paymentHeader ? verifyReceipt(decodeReceipt(r.headers.get(RECEIPT_HEADER)), { paymentHeader, body: buf, payTo: paid?.payTo, declaration: declHeader }) : 'missing';
+    const receipt = decodeReceipt(r.headers.get(RECEIPT_HEADER));
+    // A prepaid ledger (C... payTo) cannot sign: its seller role signs for it.
+    const signers = receipt && paid?.payTo && receipt.signer !== paid.payTo ? await receiptSignersFor(paid.payTo, opts.network, opts.rpcUrl) : [];
+    call.receipt = paymentHeader ? verifyReceipt(receipt, { paymentHeader, body: buf, payTo: paid?.payTo, declaration: declHeader, signers }) : 'missing';
     let json: unknown = null;
     try { json = JSON.parse(Buffer.from(buf).toString('utf8')); } catch { /* not JSON */ }
     const d = checkDelivery({ url, terms: opts.terms, header: declHeader, body: json });

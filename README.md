@@ -32,6 +32,7 @@ Part of the [402Scope observatory](https://402scope.org).
 | Agent wallet paying over x402 (`AgentWalletExactScheme`) | Working on testnet with a standard facilitator |
 | Who and how much: trust policy plus a spending limit on the same wallet (OpenZeppelin semantics, x402-compatible) | Working, 9 end-to-end tests — [docs/agent-wallet.md](docs/agent-wallet.md#who-and-how-much-trust-policy-plus-spending-limit) |
 | Passkey owner for agent wallets (WebAuthn verifier): the owner manages the budget with a passkey, the agent only pays | Working, tested — [docs/agent-wallet.md](docs/agent-wallet.md#the-owner-holds-a-passkey-the-agent-holds-a-key) |
+| Prepaid sellers (`batch-settlement`, e.g. Fermah Pay): probe, paid measurement from a prepaid balance, receipts signed by the ledger's seller role | Working, tested; seller role read on testnet each run — [docs/prepaid-ledgers.md](docs/prepaid-ledgers.md) |
 | Python verifier: receipts, evidence proofs, onchain quorum reads (`stellar-sdk` for Python) | Working, tested against the TypeScript vectors and each testnet deployment — [python/](python) |
 | Typed TypeScript clients for every contract, generated from the deployed wasm | Working — `import { clients } from '402scope-trust'`, [src/clients](src/clients) |
 | Any facilitator: trust hooks for `@x402/core` facilitators (flag or block), ranked Bazaar discovery, `/v1/sellers` API | Working, tested — [docs/facilitators.md](docs/facilitators.md) |

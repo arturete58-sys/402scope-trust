@@ -51,6 +51,7 @@ import { probe } from '../probe.js';
 import { deliveryReceipts } from '../receipts.js';
 import { declare, declareDeliveryTerms, declarationsResourceServerExtension, readTerms, type DeliveryTerms } from '../declarations.js';
 import { onchainSellerChecker, rankResources, withTrustHooks, type TrustDecision } from '../facilitator.js';
+import { prepaidSeller } from '../prepaid.js';
 import { NO_DECLARATIONS } from '../probe.js';
 import { scoreEndpoint } from '../score.js';
 import { sellerScores } from '../seller.js';
@@ -371,6 +372,15 @@ async function main(): Promise<void> {
 
   // 8. OpenZeppelin's Built on Stellar facilitator as a drop-in (testnet key from its public generator)
   out.openzeppelin = await tryOpenZeppelin({ server, token, sellerGood: k.sellerGood, buyer: k.buyer1, wallet, agentKey, verifier });
+
+  // 8b. Prepaid ledgers (Fermah Pay, batch-settlement): read the seller role a receipt must be signed by.
+  try {
+    const ledger = 'CD3GESMYMJ3MNWNSKS6P7TEDHL5HYEWSGTFX7A3ENDB5MXTQ5TED7PSI';
+    const seller = await prepaidSeller(ledger, NETWORK, RPC);
+    out.prepaidLedger = { contract: ledger, seller, readable: !!seller };
+  } catch (e) {
+    out.prepaidLedger = { error: (e as Error).message.slice(0, 200) };
+  }
 
   // 9. Stellar's official demo (unpaid conformance check)
   try {

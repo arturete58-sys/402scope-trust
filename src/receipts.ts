@@ -94,11 +94,11 @@ export function decodeReceipt(header: string | null | undefined): Receipt | null
 /**
  * Verifies a receipt against what the buyer actually sent and received.
  * - `valid`: signature checks, hashes match, and the signer is the payTo paid;
- * - `unbound`: signature and hashes check but the signer is not the payTo
- *   (e.g. a contract payTo, or a separate signing key);
+ * - `unbound`: signature and hashes check but the signer is neither the payTo
+ *   nor one of `signers` (keys bound to it, such as a prepaid ledger's seller);
  * - `invalid`: wrong signature or hashes; `missing`: no receipt.
  */
-export function verifyReceipt(r: Receipt | null, expect: { paymentHeader: string; body: Uint8Array | string; payTo?: string | null; declaration?: string | null }): ReceiptCheck {
+export function verifyReceipt(r: Receipt | null, expect: { paymentHeader: string; body: Uint8Array | string; payTo?: string | null; declaration?: string | null; signers?: string[] }): ReceiptCheck {
   if (!r) return 'missing';
   try {
     if (r.payment !== sha256hex(expect.paymentHeader) || r.body !== sha256hex(expect.body)) return 'invalid';
@@ -108,7 +108,8 @@ export function verifyReceipt(r: Receipt | null, expect: { paymentHeader: string
     const sig = Buffer.from(r.sig, 'base64');
     const ok = r.v === RECEIPT_VERSION_1 ? kp.verify(receiptMessage(r), sig) : kp.verifyMessage(receiptMessage(r), sig);
     if (!ok) return 'invalid';
-    return expect.payTo && expect.payTo === r.signer ? 'valid' : 'unbound';
+    // The payTo, or a key bound to it (e.g. the seller role of a prepaid ledger contract, see prepaid.ts).
+    return (expect.payTo && expect.payTo === r.signer) || (expect.signers ?? []).includes(r.signer) ? 'valid' : 'unbound';
   } catch {
     return 'invalid';
   }
