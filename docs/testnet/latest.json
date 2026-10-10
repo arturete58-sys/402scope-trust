@@ -1,46 +1,46 @@
 {
   "version": 3,
   "network": "stellar:testnet",
-  "startedAt": "2026-10-09T11:55:14.877Z",
+  "startedAt": "2026-10-10T11:12:06.088Z",
   "accounts": {
-    "admin": "GBEAFPQKYEK7T2O5GM6AZE27KAO76FHH7QSDSUVEVVWDQTXFXRJTLHZV",
-    "issuer": "GBJGVWAPDMOW6JS7ALAYARYC6XJNSKDQGY6Q5JPWWSWT7PZXIFYRQDW6",
-    "sellerGood": "GC52ABNGW4VPC6AO5VN4WAFEMRTYJJQFJ2LR2ULRTRHNZWCO7E5QC2R3",
-    "sellerBad": "GA7WXBGCM3DYVPZ7XCPX2VV5GJUCMGJOC2MX23M4E6PDDV32LI4KBHD4",
-    "sellerStale": "GCAFBMLMO35EMOXFAK57UBYQHG7Y6GYZMXH2YODPXCQGEQY2AH4LDNN2",
-    "buyer1": "GD6SBARDBUJZR6OB6SMIM6PVIGWW2AC3667PVOUD2NIPVVCKJNOZYGZW",
-    "buyer2": "GABP5FQZTOHYDW4M4RYGYB2UAOFRKDZRBWTOOAPEMQ26B2A3VWTAL4MM",
-    "facilitator": "GDOZSQDKGHTCFEBDBBDPIIEQM3IB5427YG7G7LS7YGTUFJ5KVPKW6LKZ",
-    "attester1": "GC4JIR5OUMM3JD4BSR5AY2PN33H5TMOMZHHEOD7MKE6R2PFIO46L374I",
-    "attester2": "GCI4FF32J2ZDBCF3DCM7VZ4YVTTMHB424E5XYM74NCOFA6WUVQAGRZEJ"
+    "admin": "GDP6S4OLQIYYMNDJYI6GIGYEOKR46AKU77NZDY5LFRHKSJX5LBRHU2TJ",
+    "issuer": "GCA6KHTG352ZPGMRY476ORPL2I77QM7UVT4IPAEJ24LTV4PCKPG5RHSR",
+    "sellerGood": "GA4JA6J4BZD3NF3MTUP2E7SWICXWAYOFFWFL6GSOVLUH2PMNOESWWO6Q",
+    "sellerBad": "GBIUTO4KGHDLICRWGESZI2IS3K6HOMAJLLUSRSQRQ7ZBWOP35ZPMLCAV",
+    "sellerStale": "GCHGIKXMURGQMOODKH6M54OHLPDC2SCSEHTIMXRTNNJPXE2NSUZLRITK",
+    "buyer1": "GB7IOTL6BTTFKMCPF26M5HQI6F3I7JV4L4IHIXAZNBSGZCMYFCLRMQTK",
+    "buyer2": "GCDQG52SR7FZYBBC5OAX42OUF7ULUJZ55I2T5E6QCWMZKZOC5N2YRMXR",
+    "facilitator": "GB2PQADCOZ2XDLQ6PT6H2QHVFBEC4LWHVDSQBNNFJ2IWIBOLVEKG6L7S",
+    "attester1": "GCCFURYAJPODNJV7XHXLBU2R2W4K52GFCALQMNQXXSISMVS3ZP35CROG",
+    "attester2": "GATH4PGT3TSUS5DV7M6RE3J3YGIQ2TZ4T3JMAYYOKAWGXPALMKL5WUGD"
   },
   "contracts": {
-    "registry": "CATKUFGWBOG7MTUCH6RPQJPCA5MGNYHFZNEGBTUB3EWNCWRLVASNXUUC",
-    "policy": "CC4ZBGWSNCR53AKVGG34XPCAVALOLV4FK2M2JDSCUC7WMQSYAAJOVTC3",
-    "verifier": "CCOEEN4PJQLPUIVO3JXGM4C7KPO6C42E62B3HCSBQ6PCCXZJ6YSUEIKC",
-    "wallet": "CDCW4JP3FEXWW4VXVQLEVAFLW4VXPSTVWXI3QTTYYOAM3U4AXTL4Q7TW",
-    "token": "CDNX7KCWRX6UIASO2P63JT53UGC443LBENSL47WJEXD67UPZ6DVMH5UQ",
-    "spendingLimit": "CBRWWTPZKYIUDBRWT2OKZMDZGM4ZWDUXFTNB3YWSVNCQTHARCYQD2FTN",
-    "budgetWallet": "CBXSBWZUYPJAAH2ZNYRJSLMA5BUNKQ6572IYVRTFV74PS4FWOK7P7H7F",
-    "webauthnVerifier": "CASYHCAF7FUPNNKPKRARQKLGNES572BVTEVB7RXXBJ4IHVYBWL3SSDGV",
-    "refundBond": "CBHXOKRMXXS6TDX5ORS343TIWQC3FJPBECNYRGSZC4T5K2A6TVN32X7K",
-    "escrow": "CBHQQOBGZT3FY53NY46ZT42SRKYZGOGSEIEW2K4WOUSTTKGP3M57CVB4",
+    "registry": "CD5PB2QLNVC3CYIPBNKFXBWPK44Q4K4HGYPA4XEOFCVH27DMB25ZGAVR",
+    "policy": "CAL4AJBHDZRARZKVLSQWLNQGVW6CUWSTQC6CVBPU3OLQKIHFRGLK66F6",
+    "verifier": "CAXF43CUQUFH2I4RWPEHEVROUFF52VAANPFTPUDKVTP6DP4MCKXQU3U4",
+    "wallet": "CBYH635YSFUOX523QFEGFD77TUCEXSOHFI7QXZZ6M2AVOO24H5OWFSZN",
+    "token": "CDCCTW56GNOXI2SFSSHXGYKGFKJ4FERUWQKSJA6SRQ4GVNJJTD2O4OWY",
+    "spendingLimit": "CALGBLWPKPNIIMEUDIP3BWZML4PICRZ4NT5EHCG4MZN325DUAZRAPS64",
+    "budgetWallet": "CDRJTDI7PY5ZSRUEBBRNTYEOG5IT5AGRGRZZ7L2U5XDVNW7ZMTVH27MH",
+    "webauthnVerifier": "CB6WRRXLJJ7BJTSBOEWRKYURDAHCSMXXNHN457CPGA2AQNISKCBAS7VW",
+    "refundBond": "CAHK24EP7CJATRRKIUWNK6HIECA2HPX4RHRGTQHTARTGHR537WZ2MSJW",
+    "escrow": "CDZOGSNQORZ4MKNAIT4UWQGXS4Q2UHZWKQ7VB3M4ZUZVXPKYDL5ACCHK",
     "links": {
-      "refundBond": "https://stellar.expert/explorer/testnet/contract/CBHXOKRMXXS6TDX5ORS343TIWQC3FJPBECNYRGSZC4T5K2A6TVN32X7K",
-      "escrow": "https://stellar.expert/explorer/testnet/contract/CBHQQOBGZT3FY53NY46ZT42SRKYZGOGSEIEW2K4WOUSTTKGP3M57CVB4",
-      "registry": "https://stellar.expert/explorer/testnet/contract/CATKUFGWBOG7MTUCH6RPQJPCA5MGNYHFZNEGBTUB3EWNCWRLVASNXUUC",
-      "policy": "https://stellar.expert/explorer/testnet/contract/CC4ZBGWSNCR53AKVGG34XPCAVALOLV4FK2M2JDSCUC7WMQSYAAJOVTC3",
-      "wallet": "https://stellar.expert/explorer/testnet/contract/CDCW4JP3FEXWW4VXVQLEVAFLW4VXPSTVWXI3QTTYYOAM3U4AXTL4Q7TW",
-      "token": "https://stellar.expert/explorer/testnet/contract/CDNX7KCWRX6UIASO2P63JT53UGC443LBENSL47WJEXD67UPZ6DVMH5UQ",
-      "spendingLimit": "https://stellar.expert/explorer/testnet/contract/CBRWWTPZKYIUDBRWT2OKZMDZGM4ZWDUXFTNB3YWSVNCQTHARCYQD2FTN",
-      "budgetWallet": "https://stellar.expert/explorer/testnet/contract/CBXSBWZUYPJAAH2ZNYRJSLMA5BUNKQ6572IYVRTFV74PS4FWOK7P7H7F",
-      "webauthnVerifier": "https://stellar.expert/explorer/testnet/contract/CASYHCAF7FUPNNKPKRARQKLGNES572BVTEVB7RXXBJ4IHVYBWL3SSDGV"
+      "refundBond": "https://stellar.expert/explorer/testnet/contract/CAHK24EP7CJATRRKIUWNK6HIECA2HPX4RHRGTQHTARTGHR537WZ2MSJW",
+      "escrow": "https://stellar.expert/explorer/testnet/contract/CDZOGSNQORZ4MKNAIT4UWQGXS4Q2UHZWKQ7VB3M4ZUZVXPKYDL5ACCHK",
+      "registry": "https://stellar.expert/explorer/testnet/contract/CD5PB2QLNVC3CYIPBNKFXBWPK44Q4K4HGYPA4XEOFCVH27DMB25ZGAVR",
+      "policy": "https://stellar.expert/explorer/testnet/contract/CAL4AJBHDZRARZKVLSQWLNQGVW6CUWSTQC6CVBPU3OLQKIHFRGLK66F6",
+      "wallet": "https://stellar.expert/explorer/testnet/contract/CBYH635YSFUOX523QFEGFD77TUCEXSOHFI7QXZZ6M2AVOO24H5OWFSZN",
+      "token": "https://stellar.expert/explorer/testnet/contract/CDCCTW56GNOXI2SFSSHXGYKGFKJ4FERUWQKSJA6SRQ4GVNJJTD2O4OWY",
+      "spendingLimit": "https://stellar.expert/explorer/testnet/contract/CALGBLWPKPNIIMEUDIP3BWZML4PICRZ4NT5EHCG4MZN325DUAZRAPS64",
+      "budgetWallet": "https://stellar.expert/explorer/testnet/contract/CDRJTDI7PY5ZSRUEBBRNTYEOG5IT5AGRGRZZ7L2U5XDVNW7ZMTVH27MH",
+      "webauthnVerifier": "https://stellar.expert/explorer/testnet/contract/CB6WRRXLJJ7BJTSBOEWRKYURDAHCSMXXNHN457CPGA2AQNISKCBAS7VW"
     }
   },
   "policy": {
     "attesters": [
-      "GC4JIR5OUMM3JD4BSR5AY2PN33H5TMOMZHHEOD7MKE6R2PFIO46L374I",
-      "GCI4FF32J2ZDBCF3DCM7VZ4YVTTMHB424E5XYM74NCOFA6WUVQAGRZEJ"
+      "GCCFURYAJPODNJV7XHXLBU2R2W4K52GFCALQMNQXXSISMVS3ZP35CROG",
+      "GATH4PGT3TSUS5DV7M6RE3J3YGIQ2TZ4T3JMAYYOKAWGXPALMKL5WUGD"
     ],
     "minScore": 80,
     "quorum": 2,
@@ -48,14 +48,14 @@
   },
   "attesters": [
     {
-      "address": "GC4JIR5OUMM3JD4BSR5AY2PN33H5TMOMZHHEOD7MKE6R2PFIO46L374I",
+      "address": "GCCFURYAJPODNJV7XHXLBU2R2W4K52GFCALQMNQXXSISMVS3ZP35CROG",
       "bond": "500 SCOPE",
-      "tx": "https://stellar.expert/explorer/testnet/tx/b3db924f949e17f3ef26966e36653bc69e011cd81459fee168efca2ef38965d9"
+      "tx": "https://stellar.expert/explorer/testnet/tx/c17c667abfde2718c41a90265b96aa40242c8e128962a8a437a95d4201af2acc"
     },
     {
-      "address": "GCI4FF32J2ZDBCF3DCM7VZ4YVTTMHB424E5XYM74NCOFA6WUVQAGRZEJ",
+      "address": "GATH4PGT3TSUS5DV7M6RE3J3YGIQ2TZ4T3JMAYYOKAWGXPALMKL5WUGD",
       "bond": "500 SCOPE",
-      "tx": "https://stellar.expert/explorer/testnet/tx/c2b4c698322a87b4516af7ad5924d8f739f6a984ca78fb1755527edad18b8363"
+      "tx": "https://stellar.expert/explorer/testnet/tx/5583ddbc4be5a16ca7b690aa5333c7b328c5a0f25944246e44b5d468107b8179"
     }
   ],
   "endpoints": [
@@ -69,7 +69,7 @@
         "delivered": 5,
         "receipts": 5,
         "priceOk": true,
-        "p50Ms": 4999,
+        "p50Ms": 5247,
         "lowSample": false,
         "parts": {
           "delivery": 50,
@@ -120,14 +120,14 @@
         }
       ],
       "settlements": [
-        "https://stellar.expert/explorer/testnet/tx/52ac11703db8015beec0edb58eaa78d72df26b3f3119610020e5af8ac6b6f342",
-        "https://stellar.expert/explorer/testnet/tx/9a9f855f7b515677ba81cb9c1496d341b6dcdfa5664cc1775661e2a2275338f1",
-        "https://stellar.expert/explorer/testnet/tx/1b7e728c6222440e0c32119ac0a317b131d6b27e23edb59c3e70f82d000048e7",
-        "https://stellar.expert/explorer/testnet/tx/d4d1f62e3143eced5e3bdcd4aa2fda46d273cbc36ba5a1da66e4247b453b8ecf",
-        "https://stellar.expert/explorer/testnet/tx/c3d532f145e2533b7e5e9d3554170bb5b9f61dd0b05472c54f93504d2caf39da"
+        "https://stellar.expert/explorer/testnet/tx/2b1469f72d9b08ae168be50504bcd9112508efdfde3b69607130ea7e6bb47aa5",
+        "https://stellar.expert/explorer/testnet/tx/e83458fd09e5f7106194293e09e210a2d07a0a55c5fc1a367e108ec69f56cde8",
+        "https://stellar.expert/explorer/testnet/tx/aa4672f4f81772cdcb719c4ed6cf21e2cfe4b88d472e3861187753dcb9f3d232",
+        "https://stellar.expert/explorer/testnet/tx/3d04240a6c5db00cf5be57173b90ff4039c193a29d477a52504057cb1cf6d7da",
+        "https://stellar.expert/explorer/testnet/tx/44b8803a9f9e6b9d1c1c2d8bde4a3aecee73f2eb4e588026ecbc4b3fbeb0387c"
       ],
       "errors": [],
-      "attestationTx": "https://stellar.expert/explorer/testnet/tx/d9b51b3755f448bd670511f4e101ccc99cccefdf1c4bcb908b41f8534e671465"
+      "attestationTx": "https://stellar.expert/explorer/testnet/tx/a74a62cf3df5122d0dd837f1320188c214884c030c8601c0a80ebd060a3cff43"
     },
     {
       "endpoint": "/slow",
@@ -139,7 +139,7 @@
         "delivered": 5,
         "receipts": 5,
         "priceOk": true,
-        "p50Ms": 10314,
+        "p50Ms": 10474,
         "lowSample": false,
         "parts": {
           "delivery": 50,
@@ -190,14 +190,14 @@
         }
       ],
       "settlements": [
-        "https://stellar.expert/explorer/testnet/tx/b1bdd1bddca006f9b32f8e82cabcd7b9f8b0b385d37455542b35734cb5cce666",
-        "https://stellar.expert/explorer/testnet/tx/eae3adc049a3a2232db6167bdfc9954d6cbb36fd86105d888d75dd5e63e2143c",
-        "https://stellar.expert/explorer/testnet/tx/f4744b8785d70350d1746f4a7e1e24a6b6639190c960f1eb225bcea9dad3ad82",
-        "https://stellar.expert/explorer/testnet/tx/34e1ad2bc47a074e23ba441166afcc1769f4d68ffbc1115eaf67043b2c444737",
-        "https://stellar.expert/explorer/testnet/tx/45afc92d3f34b675c80fa7253f06844739354098c23c0f2d294ed2612fd079fa"
+        "https://stellar.expert/explorer/testnet/tx/171561495d8585fd7ee8beba4d2d8a1ca2a1f6d91a0d0252d48726dcfddb537e",
+        "https://stellar.expert/explorer/testnet/tx/10912d90564afd88fce7af37bdb9392b745881cf49fad368779d12ddb46433f4",
+        "https://stellar.expert/explorer/testnet/tx/6257e3eaca8f9036a66cfd6ec15d559dbece2e0995ece179c7f05af3fb118e2a",
+        "https://stellar.expert/explorer/testnet/tx/bfcdaa716f9779b45a35055471063f3794837666dc1d84451724f1b3a3779244",
+        "https://stellar.expert/explorer/testnet/tx/dd24c752d8b7a39ec2f3d4ccda35b4663a4b6141145d91a0ce77ab7c506a664b"
       ],
       "errors": [],
-      "attestationTx": "https://stellar.expert/explorer/testnet/tx/176276cd8cd1f2a9caa5157c9d30b92a943a54d5bcf70c555ac355e63d5763ee"
+      "attestationTx": "https://stellar.expert/explorer/testnet/tx/0ee59d9945858b68d2c0d72fbf27559ba601767e0b2ebab5535305f527aaf986"
     },
     {
       "endpoint": "/wrong-type",
@@ -209,7 +209,7 @@
         "delivered": 0,
         "receipts": 0,
         "priceOk": true,
-        "p50Ms": 5233,
+        "p50Ms": 4961,
         "lowSample": false,
         "parts": {
           "delivery": 0,
@@ -260,16 +260,16 @@
         }
       ],
       "settlements": [
-        "https://stellar.expert/explorer/testnet/tx/3af57469ad859d35d5e2c292fe8709cf94537734d965d9b81ebb2329c531518a",
-        "https://stellar.expert/explorer/testnet/tx/33210db063e5e5f8659d8efbfeced8bb5692496e129cad6ee60440ad439289f3",
-        "https://stellar.expert/explorer/testnet/tx/2df3908f0ad3943e23c8ff9f1c29bff3614b1dbea136eadf8a48ccdbbc473808",
-        "https://stellar.expert/explorer/testnet/tx/3edeaa2584ade2d3c63954a907ffad5397c847b7b1a97321ae9db4187a96abb9",
-        "https://stellar.expert/explorer/testnet/tx/7a3055898cd8122d3283e1830a246fac1e613cc7fc9772b5d4be5acac6539060"
+        "https://stellar.expert/explorer/testnet/tx/662b81c64fb77372f5b55d6e7bd90df0e01f5a99afc9d5cc97481d5e9b2dfa81",
+        "https://stellar.expert/explorer/testnet/tx/c9b9d8ef1afa0b38f487e63edc2e06feb5026d2500a347aca58c1e0921d42995",
+        "https://stellar.expert/explorer/testnet/tx/f1babf0a0d961bf0f4d49d28ddc4db8ba99731d6351c7d4892b57389072edc5d",
+        "https://stellar.expert/explorer/testnet/tx/f56046eff8ac919f085252cc881bdfff03a7f1288b03d33f5b073501d8c0f36d",
+        "https://stellar.expert/explorer/testnet/tx/ce482f293609866b6dfbb7e1cbf0ddea0e91254e5388765232df05cbb124b86c"
       ],
       "errors": [
         "declared application/json, got text/html; charset=utf-8"
       ],
-      "attestationTx": "https://stellar.expert/explorer/testnet/tx/a82afb7b68c642e05bbe934fa2b7044b311d46525c3a961021d617e2c03807e8"
+      "attestationTx": "https://stellar.expert/explorer/testnet/tx/9eeeabe912d23ef1cbae0dbb10b7451adaa4bff7e64a64bd48e05a229a093f21"
     },
     {
       "endpoint": "/broken",
@@ -335,7 +335,7 @@
       "errors": [
         "no PAYMENT-RESPONSE header"
       ],
-      "attestationTx": "https://stellar.expert/explorer/testnet/tx/37e30f3c3e28636405834ffb1440f8c50f57e767b10d1162c86aa28f2eb41daf"
+      "attestationTx": "https://stellar.expert/explorer/testnet/tx/a723e86e6656fafd9b257f87f42e218827051114c2180a85f34ffcd18b2ac897"
     },
     {
       "endpoint": "/stale",
@@ -347,7 +347,7 @@
         "delivered": 0,
         "receipts": 5,
         "priceOk": true,
-        "p50Ms": 5066,
+        "p50Ms": 5309,
         "lowSample": false,
         "parts": {
           "delivery": 0,
@@ -408,94 +408,94 @@
         }
       ],
       "settlements": [
-        "https://stellar.expert/explorer/testnet/tx/af3a9a8f15300d37957993f05dbfde1416ebbd785516470d55674810718b77f0",
-        "https://stellar.expert/explorer/testnet/tx/1cbf00b5556bc400d40e0c32ef1068e050f27b98ad0cc8bd5a7304c9efe350b7",
-        "https://stellar.expert/explorer/testnet/tx/9311123a09bf107dd7866cef525f74feb6c89475012fae47612a359218581ffb",
-        "https://stellar.expert/explorer/testnet/tx/ae8b4a26419fc43f0f25b2a40f857fbc80cf23f4cba9024ed76f46ed6268521c",
-        "https://stellar.expert/explorer/testnet/tx/2f3052efcde157868600b7af53d7e9d3e3bfc73cc184509f9b8c1d92c7fcc4ce"
+        "https://stellar.expert/explorer/testnet/tx/b6439d4659808ed5cdaaa7d270e98bee27bedae691cee582c13c5257e41360a4",
+        "https://stellar.expert/explorer/testnet/tx/926a7d50b6f63da4c15d31a1e9ec0645c92dfd96a21d14a8e6b14769d23a43fc",
+        "https://stellar.expert/explorer/testnet/tx/565e03ce267a7ea6cdc132db0e3edf8072f09866fe65acb7a990c15a820df4c9",
+        "https://stellar.expert/explorer/testnet/tx/890bd6bd2eb1a99bd3655ea9ba117a89d505dc6ff55045a8d8d00e01fb48db82",
+        "https://stellar.expert/explorer/testnet/tx/505e6d77b6af9c2edb0c00841757ecc5755426c6b58ae34a9b96b2072e571e8c"
       ],
       "errors": [
         "broke its own declaration: EXCEEDS_DECLARED_MAX"
       ],
-      "attestationTx": "https://stellar.expert/explorer/testnet/tx/62b4f8c9388f476c5005eff4c8223170c67f769b926c00c9abb71b180e99a604"
+      "attestationTx": "https://stellar.expert/explorer/testnet/tx/4c6769f65fbf6598f2dd7157fcdb4736e1b45eb6abd65d62e4e21a2641e08694"
     }
   ],
   "sellers": [
     {
-      "seller": "GC52ABNGW4VPC6AO5VN4WAFEMRTYJJQFJ2LR2ULRTRHNZWCO7E5QC2R3",
+      "seller": "GA4JA6J4BZD3NF3MTUP2E7SWICXWAYOFFWFL6GSOVLUH2PMNOESWWO6Q",
       "label": "good seller",
       "attestations": [
         {
-          "attester": "GC4JIR5OUMM3JD4BSR5AY2PN33H5TMOMZHHEOD7MKE6R2PFIO46L374I",
+          "attester": "GCCFURYAJPODNJV7XHXLBU2R2W4K52GFCALQMNQXXSISMVS3ZP35CROG",
           "score": 98,
           "calls": 10,
           "delivered": 10,
           "receipts": 10,
-          "tx": "https://stellar.expert/explorer/testnet/tx/5ad45dd500e938c70305ad52647d9bbb682e3137809217ddce1e6de38eec6120"
+          "tx": "https://stellar.expert/explorer/testnet/tx/cbb3a6c92eef1b088576a914f825d2bab47a40cba2eb442eaac288eebda287db"
         },
         {
-          "attester": "GCI4FF32J2ZDBCF3DCM7VZ4YVTTMHB424E5XYM74NCOFA6WUVQAGRZEJ",
+          "attester": "GATH4PGT3TSUS5DV7M6RE3J3YGIQ2TZ4T3JMAYYOKAWGXPALMKL5WUGD",
           "score": 98,
           "calls": 6,
           "delivered": 6,
           "receipts": 6,
-          "tx": "https://stellar.expert/explorer/testnet/tx/8474e4ff4ad728fd834e5071ccc7f435faaa58c0d23927b1357ba6d26208fde4"
+          "tx": "https://stellar.expert/explorer/testnet/tx/7c9947f0053ff4fc33246ca90dbe603745a18a86bb04f3512c7042b82c290c96"
         }
       ],
       "trustedBy2of2": true
     },
     {
-      "seller": "GA7WXBGCM3DYVPZ7XCPX2VV5GJUCMGJOC2MX23M4E6PDDV32LI4KBHD4",
+      "seller": "GBIUTO4KGHDLICRWGESZI2IS3K6HOMAJLLUSRSQRQ7ZBWOP35ZPMLCAV",
       "label": "bad seller",
       "attestations": [
         {
-          "attester": "GC4JIR5OUMM3JD4BSR5AY2PN33H5TMOMZHHEOD7MKE6R2PFIO46L374I",
+          "attester": "GCCFURYAJPODNJV7XHXLBU2R2W4K52GFCALQMNQXXSISMVS3ZP35CROG",
           "score": 18,
           "calls": 10,
           "delivered": 0,
           "receipts": 0,
-          "tx": "https://stellar.expert/explorer/testnet/tx/05057e9f0d404f82ec5ca244185fd212651eb5fd7bf06cfe1e5c69d0cdb6fdf6"
+          "tx": "https://stellar.expert/explorer/testnet/tx/f71fce119d1ead037faa603f6afa074919fcf667f8e465950ad2d0f85e7df38a"
         },
         {
-          "attester": "GCI4FF32J2ZDBCF3DCM7VZ4YVTTMHB424E5XYM74NCOFA6WUVQAGRZEJ",
+          "attester": "GATH4PGT3TSUS5DV7M6RE3J3YGIQ2TZ4T3JMAYYOKAWGXPALMKL5WUGD",
           "score": 18,
           "calls": 6,
           "delivered": 0,
           "receipts": 0,
-          "tx": "https://stellar.expert/explorer/testnet/tx/37b62ca05af3c77b74e72df8d3610529b91222ad640a505dc8b7077c399fec37"
+          "tx": "https://stellar.expert/explorer/testnet/tx/7851b58d3149b0d385c97fa85c1cc629849873a5477c5127c10614877e325f57"
         }
       ],
       "trustedBy2of2": false
     },
     {
-      "seller": "GCAFBMLMO35EMOXFAK57UBYQHG7Y6GYZMXH2YODPXCQGEQY2AH4LDNN2",
+      "seller": "GCHGIKXMURGQMOODKH6M54OHLPDC2SCSEHTIMXRTNNJPXE2NSUZLRITK",
       "label": "stale seller",
       "attestations": [
         {
-          "attester": "GC4JIR5OUMM3JD4BSR5AY2PN33H5TMOMZHHEOD7MKE6R2PFIO46L374I",
+          "attester": "GCCFURYAJPODNJV7XHXLBU2R2W4K52GFCALQMNQXXSISMVS3ZP35CROG",
           "score": 50,
           "calls": 5,
           "delivered": 0,
           "receipts": 5,
-          "tx": "https://stellar.expert/explorer/testnet/tx/dfaf9179a18a9bf4f785c9e1d62520fb97f1f77a80c6e768370f41b2d2b523d4"
+          "tx": "https://stellar.expert/explorer/testnet/tx/13fd82a600409a3e8430d6eda8972553ede9ccac3fc0503409b8c130da7da458"
         },
         {
-          "attester": "GCI4FF32J2ZDBCF3DCM7VZ4YVTTMHB424E5XYM74NCOFA6WUVQAGRZEJ",
+          "attester": "GATH4PGT3TSUS5DV7M6RE3J3YGIQ2TZ4T3JMAYYOKAWGXPALMKL5WUGD",
           "score": 50,
           "calls": 3,
           "delivered": 0,
           "receipts": 3,
-          "tx": "https://stellar.expert/explorer/testnet/tx/ef2d5c44a690832fde4a91dd5bda10ca627d010e4b2925ce21ea4bf3607d39d3"
+          "tx": "https://stellar.expert/explorer/testnet/tx/601b79b58c6a7f1a1a079968f5c6ac059ee9d64cbb9ab2b0d90b0e4b0c9e9ec0"
         }
       ],
       "trustedBy2of2": false
     }
   ],
   "evidence": {
-    "attester": "GC4JIR5OUMM3JD4BSR5AY2PN33H5TMOMZHHEOD7MKE6R2PFIO46L374I",
+    "attester": "GCCFURYAJPODNJV7XHXLBU2R2W4K52GFCALQMNQXXSISMVS3ZP35CROG",
     "seller": "good seller",
     "leaves": 10,
-    "root": "5d7304408cc090cf99fb4d79836576d499acce428979ce02210eff8ba1630f82",
+    "root": "9e4939d7cfbf8c33edd9d2936f3e6c8b92579c09c9a1835160cc55e0cde99116",
     "realLeafVerifiedOnchain": true,
     "forgedLeafVerifiedOnchain": false
   },
@@ -503,26 +503,26 @@
     {
       "endpoint": "/good",
       "outcome": "paid",
-      "tx": "https://stellar.expert/explorer/testnet/tx/410533f63e96adf34c4b45ae2b286bb872a71308c620be31d0bb1040dc0c7633"
+      "tx": "https://stellar.expert/explorer/testnet/tx/8a95d6623afa394f142ffe520fc9d033f35fc2b7652f6b615c82792ed5621c2c"
     },
     {
       "endpoint": "/broken",
       "outcome": "refused by the wallet policy",
-      "reason": "Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CDNX7KCWRX6UIASO2P63JT53UGC443LBENSL47WJEXD67UPZ6DVMH5UQ, topics:[error, Error(Auth, InvalidAction)], data:[\"failed account authentication "
+      "reason": "Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CDCCTW56GNOXI2SFSSHXGYKGFKJ4FERUWQKSJA6SRQ4GVNJJTD2O4OWY, topics:[error, Error(Auth, InvalidAction)], data:[\"failed account authentication "
     },
     {
       "endpoint": "/wrong-type",
       "outcome": "refused by the wallet policy",
-      "reason": "Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CDNX7KCWRX6UIASO2P63JT53UGC443LBENSL47WJEXD67UPZ6DVMH5UQ, topics:[error, Error(Auth, InvalidAction)], data:[\"failed account authentication "
+      "reason": "Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CDCCTW56GNOXI2SFSSHXGYKGFKJ4FERUWQKSJA6SRQ4GVNJJTD2O4OWY, topics:[error, Error(Auth, InvalidAction)], data:[\"failed account authentication "
     },
     {
       "endpoint": "/stale",
       "outcome": "refused by the wallet policy",
-      "reason": "Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CDNX7KCWRX6UIASO2P63JT53UGC443LBENSL47WJEXD67UPZ6DVMH5UQ, topics:[error, Error(Auth, InvalidAction)], data:[\"failed account authentication "
+      "reason": "Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CDCCTW56GNOXI2SFSSHXGYKGFKJ4FERUWQKSJA6SRQ4GVNJJTD2O4OWY, topics:[error, Error(Auth, InvalidAction)], data:[\"failed account authentication "
     }
   ],
   "budgetWallet": {
-    "wallet": "CBXSBWZUYPJAAH2ZNYRJSLMA5BUNKQ6572IYVRTFV74PS4FWOK7P7H7F",
+    "wallet": "CDRJTDI7PY5ZSRUEBBRNTYEOG5IT5AGRGRZZ7L2U5XDVNW7ZMTVH27MH",
     "price": "10000",
     "limit": "25000",
     "periodLedgers": 17280,
@@ -530,32 +530,32 @@
       {
         "endpoint": "/broken",
         "outcome": "refused by the wallet: seller not trusted",
-        "reason": "Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CDNX7KCWRX6UIASO2P63JT53UGC443LBENSL47WJEXD67UPZ6DVMH5UQ, topics:[error, Error(Auth, InvalidAction)], data:[\"failed account authentication "
+        "reason": "Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CDCCTW56GNOXI2SFSSHXGYKGFKJ4FERUWQKSJA6SRQ4GVNJJTD2O4OWY, topics:[error, Error(Auth, InvalidAction)], data:[\"failed account authentication "
       },
       {
         "endpoint": "/good",
         "outcome": "paid",
-        "tx": "https://stellar.expert/explorer/testnet/tx/2e82d16f7f4904d78b1ad5649ab885cda570fc9d0bb89b1ef4cafd3b4d2b5585"
+        "tx": "https://stellar.expert/explorer/testnet/tx/3b523ed6bcb181415bea4b5b09f36b79c46f10a62dc22fa1f325d4425772a16e"
       },
       {
         "endpoint": "/good",
         "outcome": "paid",
-        "tx": "https://stellar.expert/explorer/testnet/tx/d232aec1ad488b2f3030c3faa792f2590e7ad9c5d7451ae4fa9165aecd9cdfb1"
+        "tx": "https://stellar.expert/explorer/testnet/tx/1e037036261334e2e78541001fd2f82e1b7ce6e14483e1f5dc3c3092f513a222"
       },
       {
         "endpoint": "/good",
         "outcome": "refused by the wallet: over the spending limit",
-        "reason": "Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CDNX7KCWRX6UIASO2P63JT53UGC443LBENSL47WJEXD67UPZ6DVMH5UQ, topics:[error, Error(Auth, InvalidAction)], data:[\"failed account authentication "
+        "reason": "Failed to create payment payload: wallet refused the payment: HostError: Error(Auth, InvalidAction)\n\nEvent log (newest first):\n   0: [Diagnostic Event] contract:CDCCTW56GNOXI2SFSSHXGYKGFKJ4FERUWQKSJA6SRQ4GVNJJTD2O4OWY, topics:[error, Error(Auth, InvalidAction)], data:[\"failed account authentication "
       }
     ],
     "owner": {
       "newLimit": "50000",
-      "tx": "https://stellar.expert/explorer/testnet/tx/e46cd97047f3297f6bb3e19ed12b01cf93a1dcfbe8864fbbbb5203328a3c1bbe",
+      "tx": "https://stellar.expert/explorer/testnet/tx/221cf550f636d2d402fa2b7e88919869d63c07c798dca18ea4c0ae7eb13675b2",
       "raised": true,
       "paymentAfter": {
         "endpoint": "/good",
         "outcome": "paid",
-        "tx": "https://stellar.expert/explorer/testnet/tx/3b8dc89967ed70f23733abecc94ae4d7a84c439dbc8bd2df8850e94dbacfd769"
+        "tx": "https://stellar.expert/explorer/testnet/tx/38252401c309065c6e0267340faf06d8a474f0a2298604b7295de39c1b75cf39"
       }
     }
   },
@@ -599,13 +599,13 @@
     {
       "url": "/broken",
       "paid": false,
-      "reason": "verdict avoid: onchain: 2 current attestation(s) for seller GA7WXBGCM3DYVPZ7XCPX2VV5GJUCMGJOC2MX23M4E6PDDV32LI4KBHD4, not trusted by 2 of 2 chosen attesters at score 80 (contract CATKUFGWBOG7MTUCH6RPQJPCA5MGNYHFZNEGBTUB3EWNCWRLVASNXUUC)"
+      "reason": "verdict avoid: onchain: 2 current attestation(s) for seller GBIUTO4KGHDLICRWGESZI2IS3K6HOMAJLLUSRSQRQ7ZBWOP35ZPMLCAV, not trusted by 2 of 2 chosen attesters at score 80 (contract CD5PB2QLNVC3CYIPBNKFXBWPK44Q4K4HGYPA4XEOFCVH27DMB25ZGAVR)"
     }
   ],
   "refunds": {
-    "contract": "CBHXOKRMXXS6TDX5ORS343TIWQC3FJPBECNYRGSZC4T5K2A6TVN32X7K",
+    "contract": "CAHK24EP7CJATRRKIUWNK6HIECA2HPX4RHRGTQHTARTGHR537WZ2MSJW",
     "bond": "100000",
-    "depositTx": "https://stellar.expert/explorer/testnet/tx/9810f71207f7bb8dc1527edb2725f1044dccc8559ba2e4f61726cb78c6a205bb",
+    "depositTx": "https://stellar.expert/explorer/testnet/tx/2dfc1017e495864fa755c8fef862e7358c1aa7e0ef5001267b4869897c6bc0bf",
     "bondBefore": "100000",
     "bondAfter": "90000",
     "calls": [
@@ -618,8 +618,8 @@
         ],
         "refund": {
           "outcome": "refunded",
-          "tx": "https://stellar.expert/explorer/testnet/tx/0271d61fff67852134e011509d9e78010893a0c83515ac35944758075d6566e4",
-          "contract": "CBHXOKRMXXS6TDX5ORS343TIWQC3FJPBECNYRGSZC4T5K2A6TVN32X7K"
+          "tx": "https://stellar.expert/explorer/testnet/tx/e242cb1e03e4912a9b683d38d2235a917337a6296dbd18a9c44c4f9776833666",
+          "contract": "CAHK24EP7CJATRRKIUWNK6HIECA2HPX4RHRGTQHTARTGHR537WZ2MSJW"
         }
       },
       {
@@ -632,7 +632,7 @@
     ]
   },
   "escrow": {
-    "contract": "CBHQQOBGZT3FY53NY46ZT42SRKYZGOGSEIEW2K4WOUSTTKGP3M57CVB4",
+    "contract": "CDZOGSNQORZ4MKNAIT4UWQGXS4Q2UHZWKQ7VB3M4ZUZVXPKYDL5ACCHK",
     "receiptDeadline": 60,
     "contestWindow": 120,
     "calls": [
@@ -643,10 +643,10 @@
         "providerAtFault": false,
         "codes": [],
         "action": "confirmed",
-        "tx": "https://stellar.expert/explorer/testnet/tx/88f4d49ff87fd9f90a7fd2aa697fcc7d544fedde6966dc0554595229f3f1779e",
+        "tx": "https://stellar.expert/explorer/testnet/tx/8ebde3db44799975367eef862c7f0146135b456439792c55c0af190151df1f62",
         "held": "released",
-        "dataSeconds": 4.9,
-        "escrowSeconds": 4.9
+        "dataSeconds": 5,
+        "escrowSeconds": 4.6
       },
       {
         "endpoint": "/escrow-stale",
@@ -657,10 +657,10 @@
           "EXCEEDS_DECLARED_MAX"
         ],
         "action": "refunded",
-        "tx": "https://stellar.expert/explorer/testnet/tx/31e0e9938d60b5d201e4fa9a5287fcebf4c7308470b7da1186fbe867bd5ca059",
+        "tx": "https://stellar.expert/explorer/testnet/tx/d5dc6560d82c18355622c531e7eecf53a0bf6013c798673dd950e2e31a114a0a",
         "held": "refunded",
-        "dataSeconds": 4.6,
-        "escrowSeconds": 5.1
+        "dataSeconds": 4.9,
+        "escrowSeconds": 5.8
       }
     ]
   },
@@ -766,13 +766,13 @@
         "asset": "USDC",
         "payer": "classic account",
         "outcome": "paid",
-        "tx": "https://stellar.expert/explorer/testnet/tx/4f331f45a699fecabe49273d762262b8796889f32c0a57bde0d6e86673e1d110"
+        "tx": "https://stellar.expert/explorer/testnet/tx/070cc4ebc5228f8b6626e29b60bda8140e8a07b9c6c93d407ccda3aadd416e04"
       },
       {
         "asset": "USDC",
         "payer": "agent wallet",
         "outcome": "paid",
-        "tx": "https://stellar.expert/explorer/testnet/tx/8760d7a223f12b8a1278f0b643b3909efee046f0d003ef9dfcee8c62b3ab7d4a"
+        "tx": "https://stellar.expert/explorer/testnet/tx/9d703fd7c4cc165cf9b097d7b369f153d9be677defa948156faaf4d228f22b38"
       }
     ]
   },
@@ -804,5 +804,5 @@
       }
     ]
   },
-  "finishedAt": "2026-10-09T12:05:31.282Z"
+  "finishedAt": "2026-10-10T11:22:59.532Z"
 }
